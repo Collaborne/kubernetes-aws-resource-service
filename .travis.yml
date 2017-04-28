@@ -1,0 +1,38 @@
+dist: trusty
+sudo: false
+group: beta
+
+language: node_js
+node_js:
+- node
+services:
+- docker
+cache:
+  directories:
+  - node_modules
+before_install:
+- if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then BASE_NAME=${TRAVIS_BRANCH}; else BASE_NAME=pr${TRAVIS_PULL_REQUEST}; fi
+- NAME=`echo ${BASE_NAME} | tr -cd '[\-._[:alnum:]]'`
+- TS=`date +%Y%m%dT%H%M%S`
+- VERSION_TAG=${NAME}-${TS}-${TRAVIS_COMMIT}
+- TAGS="${NAME} ${VERSION_TAG}"
+- if [ "${TRAVIS_PULL_REQUEST}" = "false" ] && [ "${TRAVIS_BRANCH}" = "master" ]; then TAGS="${TAGS} latest"; fi
+
+- docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
+
+- "if [ -d node_modules ] && [ x$(cat node_modules/.last-node-version 2>/dev/null) != x$(node -e 'console.log(process.version)') ]; then npm rebuild && node -e 'console.log(process.version)' > node_modules/.last-node-version; fi"
+install:
+- npm install
+- npm prune && npm shrinkwrap && mkdir -p deploy && cp package.json npm-shrinkwrap.json deploy && cp -r src deploy/src && npm install --production --prefix deploy --ignore-scripts
+after_success:
+- docker build `echo ${TAGS} | sed -re "s,\b([-._[:alnum:]]+)\b,-t ${DOCKER_NAME}:\1,g"` .
+deploy:
+  provider: script
+  script: "${SHELL} ./travis-deploy.sh ${DOCKER_NAME} ${TAGS}"
+  on:
+    all_branches: true
+env:
+  global:
+    - DOCKER_NAME=collaborne/kubernetes-aws-resource-service
+    - secure: "OPiYKCt4+v97c7gMK0p+g+aJYQJRFdClhJwq3RaPxDoowqj5Lm2EIlBE8aWwaGvkZK+5qbcglE2VezU4U8OjuD1ExzigX5C1bhsoXGaAYcHHW495VtFBu51q6i7LduiEjZVqMDzrDAsqITzS6CbhJ8JbrzRqhwlq3rBpx8Vnv8pkXJPK9un60lrf9mn/33HEbC9TULTicIM2nbmfz3zQ4XMQdUG+gGFnQl4NyapkOyKPS/igUE6j56ESiO/mwg06adVtqdo7WMbhTvyHzyyEX2cONq1UJOXtg4i/YWKyqRm55xZx2qYtwuhgimP+MrLLjnr73EZ1Hapcr8RTqd0MPm6BfDxe3GBnr0Dplm1ZBg1leFCczxHTwC9dlGHWEQLyWLaFZSRtIsYnZsNSb60z05n2cmQMJMeRRm8/YUFsrMAaOSrIWlR3YIgOgx8RWAn76di6rFOPOAmK2eh8eqqkOlBtd6Nx63mf1HP0Gl2wMVskPe7jdF7ZbQXY10phO4QVfSjGyER9GqOEe8vStH6dh4fG2VQA+PnJs5QuuYhjM1Hbofmf9ORwiXPJ8oCi9/mTSh+6n4V6+RUcO8dSyIHz6KHqpo5fUkcgIoL5FNyeABKPujvx1ULdE6AJZm/ISHyxyL+eur/SXb4qizlP4OB4YH24UZvYz9guerZ9upYF8uc="
+    - secure: "zUQCyRh3BIf1q9Ay9Hy1lSXLjXQjb1GQwRuPCGMQFKh3zjuoH9DfeiifSasFddYTFXYR9PA7TK9ZByLCqBIDRIYIUFUCdbiNRfJrJcocl31rRDWYMJ0B90b6QlllNXZgBDk36dNEiGQE8WXD1BzO7N7xTJiO9JflU0gG5RSJ/eLgTz+dtbRosvhGFcDFgg56dfqTMb/+sui1ogXhztzmiSGR2bzccVEdJ49WmgPipgT7JSBRE3DLNAOPVMiPOrA7hZN/8w/kfn/u7kE1Z2+LwKFtscRFfIPrDebOtamm/5XsMoY5aMLBrOO6593eGIvQe5wHmlLiPOo+cfyVykWt8qKS6tjYQTPfysD1vYKvOLkTyYBy1is5uxqIxuZdTX1HujiHGXqFZAuE0yD+F/DtjE/H1Jg/Rla6+Oy01N7B/f7KjNyRBRQ9vdNLmq9V0eYtDF/Z/HIFo0XG2gQf2NATGjyM6sDbvms98JUvFQ0nXzv0QZ+wz3dst6yj41aDRTAV26bHQ7wXhzyhUNXzpL6RAaPLs+nr99fwytBhpFa50bgqKq42dSaetpe8bS/EoWjlVhMa+1fS78NDjXDJsV3eFSCPbc+0Ur1gfu6Z5IMWulEA8XuVO0qkyaBSUStTpKYDdEM5f3SBtkP0ungaQikXo9OEcvd8sRRiHpcafqulww0="

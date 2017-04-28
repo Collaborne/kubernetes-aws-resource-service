@@ -1,0 +1,42 @@
+{
+  "name": "kubernetes-aws-resource-service",
+  "version": "0.0.1",
+  "description": "Manage AWS resources via kubernetes",
+  "main": "src/index.js",
+  "scripts": {
+    "install": "npm-warn-shrinkwrap",
+    "prepublish": "eslint src",
+    "postinstall": "check-node-version --package",
+    "test": "echo 'No tests yet'",
+    "start": "node src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Collaborne/kubernetes-aws-resource-service.git"
+  },
+  "keywords": [
+    "kubernetes",
+    "AWS",
+    "watch"
+  ],
+  "author": "Collaborne B.V. <opensource@collaborne.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Collaborne/kubernetes-aws-resource-service/issues"
+  },
+  "homepage": "https://github.com/Collaborne/kubernetes-aws-resource-service#readme",
+  "dependencies": {
+    "auto-kubernetes-client": "^0.3.1",
+    "aws-sdk": "^2.45.0",
+    "check-node-version": "^2.0.1",
+    "log4js": "^1.1.1",
+    "npm-warn-shrinkwrap": "^1.0.2",
+    "yargs": "^7.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^3.19.0"
+  },
+  "engines": {
+    "node": ">=6.9.0"
+  }
+}

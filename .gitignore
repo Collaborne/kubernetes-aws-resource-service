@@ -1,0 +1,5 @@
+/node_modules/
+/deploy/
+npm-debug.log
+npm-shrinkwrap.json
+

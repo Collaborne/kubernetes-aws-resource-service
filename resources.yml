@@ -1,0 +1,12 @@
+# Resources managed by the service
+#
+# This file lists each resource, and can directly be applied to a kubernetes cluster
+# by `kubectl apply`
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+metadata:
+  name: queue.aws.kubernetes.collaborne.com
+description: "A specification of a SQS queue"
+versions:
+- name: v1
+---
