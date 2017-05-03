@@ -161,7 +161,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 		const queuePromises = {};
 
 		logger.info(`Watching queues at ${resourceVersion}...`);
-		const watch = queues.watch(resourceVersion)
+		queues.watch(resourceVersion)
 			.on('data', function(item) {
 				const queue = item.object;
 
