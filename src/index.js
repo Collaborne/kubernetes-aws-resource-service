@@ -52,7 +52,7 @@ if (argv.server) {
 
 const k8s = require('auto-kubernetes-client');
 const sqs = new AWS.SQS({
-	endpoint: process.env.AWS_SQS_ENDPOINT_OVERRIDE,
+	endpoint: process.env.AWS_SQS_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION,
 });
 
