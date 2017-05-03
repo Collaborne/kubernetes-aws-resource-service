@@ -113,18 +113,31 @@ k8s(k8sConfig).then(function(k8sClient) {
 				return resolve(data);
 			}
 
-			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: translateQueueAttributes(queue) }, handleCreateQueueResponse);
+			const attributes = translateQueueAttributes(queue);
+			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, handleCreateQueueResponse);
 		});
 	}
 
 	function updateQueue(queue) {
+		const attributes = translateQueueAttributes(queue);
+		if (Object.keys(attributes).length === 0) {
+			// The API requires that we provide attributes when trying to update attributes.
+			// If the caller intended to set values to their defaults, then they must be explicit and
+			// provide these values. In other words: AWS SQS copies the defaults at creation time, and
+			// afterwards there is no such thing as a "default" anymore.
+			// From our side though this is not an error, but we merely ignore the request.
+			// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
+			logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
+			return Promise.resolve();
+		}
+		
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
 					return reject(err);
 				}
 
-				return sqs.setQueueAttributes({ QueueUrl: data.QueueUrl, Attributes: translateQueueAttributes(queue) }, function(err, data) {
+				return sqs.setQueueAttributes({ QueueUrl: data.QueueUrl, Attributes: attributes }, function(err, data) {
 					if (err) {
 						return reject(err);
 					}
