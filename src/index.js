@@ -194,9 +194,10 @@ k8s(k8sConfig).then(function(k8sClient) {
 					});
 					break;
 				case 'ERROR':
-					logger.error(`Error while watching: ${item.object.message}, restarting watch`);
-					watch.close();
-					return mainLoop();
+					// Log the message, and continue: usually the stream would end now, but there might be more events
+					// in it that we do want to consume.
+					logger.warn(`Error while watching: ${item.object.message}, ignoring`);
+					return;
 				default:
 					logger.warn(`Unkown watch event type ${item.type}, ignoring`);
 					return;
