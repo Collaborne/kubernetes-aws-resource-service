@@ -5,7 +5,7 @@
 apiVersion: extensions/v1beta1
 kind: ThirdPartyResource
 metadata:
-  name: queue.aws.kubernetes.collaborne.com
+  name: queue.aws.k8s.collaborne.com
 description: "A specification of a SQS queue"
 versions:
 - name: v1
