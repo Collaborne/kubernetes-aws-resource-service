@@ -4,6 +4,7 @@
 
 const yargs = require('yargs');
 const fs = require('fs');
+const path = require('path');
 const AWS = require('aws-sdk');
 
 const logger = require('log4js').getLogger();
@@ -40,10 +41,11 @@ if (argv.server) {
 		k8sConfig.key = fs.readFileSync(argv.clientKey, 'utf8');
 	}
 } else if (process.env.KUBERNETES_SERVICE_HOST) {
+	const credentialsPath = '/var/run/secrets/kubernetes.io/serviceaccount/';
 	k8sConfig = {
 		url: `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`,
-		ca: fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'utf8'),
-		auth: { bearer: fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8') }
+		ca: fs.readFileSync(path.resolve(credentialsPath, 'ca.crt'), 'utf8'),
+		auth: { bearer: fs.readFileSync(path.resolve(credentialsPath, 'token'), 'utf8') }
 	}
 } else {
 	logger.error('Unknown Kubernetes API server');
