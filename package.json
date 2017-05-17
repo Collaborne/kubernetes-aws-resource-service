@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/Collaborne/kubernetes-aws-resource-service#readme",
   "dependencies": {
-    "auto-kubernetes-client": "^0.4.1",
+    "auto-kubernetes-client": "^0.4.3",
     "aws-sdk": "^2.45.0",
     "check-node-version": "^2.0.1",
     "log4js": "^1.1.1",
