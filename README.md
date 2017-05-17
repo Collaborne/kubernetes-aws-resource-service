@@ -7,10 +7,10 @@ A service to automatically manage AWS resources based on kubernetes TPRs.
 * SQS queues
   ```yaml
   kind: Queue
-    metadata:
-      name: my-queue
-    spec:
-      anyAwsSqsQueueAttribute: value
+  metadata:
+    name: my-queue
+  spec:
+    anyAwsSqsQueueAttribute: value
   ```
   
   All attributes are converted into strings, embedded `redrivePolicy` and `policy` attributes using `JSON.stringify()`.
