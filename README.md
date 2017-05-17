@@ -4,6 +4,8 @@ A service to automatically manage AWS resources based on kubernetes TPRs.
 
 ## Supported Resources
 
+[resources.yml](/resources.yml) has the definitions of all supported resources.
+
 * SQS queues
   ```yaml
   kind: Queue
@@ -15,4 +17,5 @@ A service to automatically manage AWS resources based on kubernetes TPRs.
   
   All attributes are converted into strings, embedded `redrivePolicy` and `policy` attributes using `JSON.stringify()`.
 * Others? [PRs welcome :D](https://github.com/Collaborne/kubernetes-aws-resource-service/compare)
+  
 
