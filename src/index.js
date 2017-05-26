@@ -121,6 +121,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 							return createQueue(queue).then(data => handleCreateQueueResponse(null, data), err => handleCreateQueueResponse(err, null));
 						}, 10000);
 					}
+					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
 					return reject(err);
 				}
 
@@ -136,12 +137,14 @@ k8s(k8sConfig).then(function(k8sClient) {
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
+					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
 
 				const queueUrl = data.QueueUrl;
 				return sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
 					if (err) {
+						logger.warn(`[${queue.metadata.name}]: Cannot determine queue ARN: ${err.message}`);
 						return reject(err);
 					}
 
@@ -160,6 +163,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 
 					return sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
 						if (err) {
+							logger.warn(`[${queue.metadata.name}]: Cannot update queue attributes: ${err.message}`);
 							return reject(err);
 						}
 
@@ -174,11 +178,13 @@ k8s(k8sConfig).then(function(k8sClient) {
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
+					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
 
 				return sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
 					if (err) {
+						logger.warn(`[${queue.metadata.name}]: Cannot delete queue: ${err.message}`);
 						return reject(err);
 					}
 
