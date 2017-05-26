@@ -71,9 +71,10 @@ k8s(k8sConfig).then(function(k8sClient) {
 	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
 	 *
 	 * @param {Object} queue a queue definition
+	 * @param {String} [queueArn] the ARN of the queue
 	 * @return {Object} the queue attributes
 	 */
-	function translateQueueAttributes(queue) {
+	function translateQueueAttributes(queue, queueArn) {
 		function capitalize(s) {
 			return s[0].toUpperCase() + s.substring(1);
 		}
@@ -83,8 +84,19 @@ k8s(k8sConfig).then(function(k8sClient) {
 			let resultValue;
 			switch (key) {
 			case 'redrivePolicy':
-			case 'policy':
 				resultValue = JSON.stringify(value);
+				break;
+			case 'policy':
+				// Inject the queue ARN as 'Resource' into all statements of the policy
+				let policy;
+				if (queueArn) {
+					logger.debug(`[${queue.metadata.name}]: Injecting resource ARN ${queueArn} into policy document`)
+					policy = Object.assign({}, value, { Statement: (value.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement)) });
+				} else {
+					policy = value;
+				}
+
+				resultValue = JSON.stringify(policy);
 				break;
 			default:
 				// Convert to string
@@ -121,30 +133,38 @@ k8s(k8sConfig).then(function(k8sClient) {
 	}
 
 	function updateQueue(queue) {
-		const attributes = translateQueueAttributes(queue);
-		if (Object.keys(attributes).length === 0) {
-			// The API requires that we provide attributes when trying to update attributes.
-			// If the caller intended to set values to their defaults, then they must be explicit and
-			// provide these values. In other words: AWS SQS copies the defaults at creation time, and
-			// afterwards there is no such thing as a "default" anymore.
-			// From our side though this is not an error, but we merely ignore the request.
-			// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
-			logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
-			return Promise.resolve();
-		}
-		
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
 					return reject(err);
 				}
 
-				return sqs.setQueueAttributes({ QueueUrl: data.QueueUrl, Attributes: attributes }, function(err, data) {
+				const queueUrl = data.QueueUrl;
+				return sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
 					if (err) {
 						return reject(err);
 					}
 
-					return resolve(data);
+					const attributes = translateQueueAttributes(queue, data.Attributes.QueueArn);
+					if (Object.keys(attributes).length === 0) {
+						// The API requires that we provide attributes when trying to update attributes.
+						// If the caller intended to set values to their defaults, then they must be explicit and
+						// provide these values. In other words: AWS SQS copies the defaults at creation time, and
+						// afterwards there is no such thing as a "default" anymore.
+						// From our side though this is not an error, but we merely ignore the request.
+						// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
+						logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
+						return resolve();
+					}
+					
+
+					return sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
+						if (err) {
+							return reject(err);
+						}
+
+						return resolve(data);
+					});
 				});
 			});
 		});
