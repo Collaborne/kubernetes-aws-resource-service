@@ -137,6 +137,13 @@ k8s(k8sConfig).then(function(k8sClient) {
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
+					if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
+						// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
+						// or has been deleted in the meantime. Create it again.
+						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
+						return resolve(createQueue(queue));
+					}
+					
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
