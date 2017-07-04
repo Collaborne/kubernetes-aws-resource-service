@@ -200,13 +200,12 @@ k8s(k8sConfig).then(function(k8sClient) {
 	}
 
 	const queues = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace).queues;
+	// Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
+	const queuePromises = {};
 
 	function mainLoop() {
 		// Highest version seen
 		let resourceVersion = 0;
-
-		// Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
-		const queuePromises = {};
 
 		logger.info(`Watching queues at ${resourceVersion}...`);
 		queues.watch(resourceVersion)
