@@ -203,9 +203,13 @@ k8s(k8sConfig).then(function(k8sClient) {
 	// Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
 	const queuePromises = {};
 
-	function mainLoop() {
-		// Highest version seen
-		let resourceVersion = 0;
+	/**
+	 * Main loop
+	 *
+	 * @param {number} [startResourceVersion=0] resource version from which to start
+	 */
+	function mainLoop(startResourceVersion = 0) {
+		let resourceVersion = startResourceVersion;
 
 		logger.info(`Watching queues at ${resourceVersion}...`);
 		queues.watch(resourceVersion)
@@ -263,9 +267,9 @@ k8s(k8sConfig).then(function(k8sClient) {
 				return result;
 			})
 			.on('end', function() {
-				// Restart the whole thing.
-				logger.info('Watch ended, re-syncing everything');
-				return mainLoop();
+				// Restart the watch from the last known version.
+				logger.info('Watch ended, restarting');
+				return mainLoop(resourceVersion);
 			});
 	}
 
