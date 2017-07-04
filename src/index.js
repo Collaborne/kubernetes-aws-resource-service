@@ -65,8 +65,6 @@ if (!argv.namespace) {
 }
 
 k8s(k8sConfig).then(function(k8sClient) {
-	const queues = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace).queues;
-
 	/**
 	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
 	 *
@@ -200,6 +198,8 @@ k8s(k8sConfig).then(function(k8sClient) {
 			});
 		});
 	}
+
+	const queues = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace).queues;
 
 	function mainLoop() {
 		// Highest version seen
