@@ -203,74 +203,88 @@ k8s(k8sConfig).then(function(k8sClient) {
 	// Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
 	const queuePromises = {};
 
+	function enqueue(name, next) {
+		// Enqueue the request to happen when the previous request is done.
+		const previousPromise = queuePromises[name] || Promise.resolve();
+
+		return queuePromises[name] = previousPromise.then(next);
+	}
+
 	/**
 	 * Main loop
-	 *
-	 * @param {number} [startResourceVersion=0] resource version from which to start
 	 */
-	function mainLoop(startResourceVersion = 0) {
-		let resourceVersion = startResourceVersion;
+	function mainLoop() {
+		// List all known queues
+		queues.list().then(list => {
+			const resourceVersion = list.metadata.resourceVersion;
 
-		logger.info(`Watching queues at ${resourceVersion}...`);
-		queues.watch(resourceVersion)
-			.on('data', function(item) {
-				const queue = item.object;
-
-				// Update the version: we've processed things until here now
-				resourceVersion = queue.metadata.resourceVersion;
+			// Treat all queues we see as "update", which will trigger a creation/update of attributes accordingly.
+			for (const queue of list.items) {
 				const name = queue.metadata.name;
-
-				// Enqueue the request to happen when the previous request is done.
-				const previousPromise = queuePromises[name] || Promise.resolve();
-
-				let result;
-				
-				switch (item.type) {
-				case 'ADDED':
-					result = previousPromise.then(function() {
-						logger.info(`[${name}]: Creating queue`);
-						return createQueue(queue);
-					});
-					break;
-				case 'MODIFIED':
-					result = previousPromise.then(function() {
-						logger.info(`[${name}]: Updating queue attributes`);
-						return updateQueue(queue);
-					});
-					break;
-				case 'DELETED':
-					result = previousPromise.then(function() {
-						logger.info(`[${name}]: Deleting queue`);
-						return deleteQueue(queue);
-					});
-					break;
-				case 'ERROR':
-					// Log the message, and continue: usually the stream would end now, but there might be more events
-					// in it that we do want to consume.
-					logger.warn(`Error while watching: ${item.object.message}, ignoring`);
-					return;
-				default:
-					logger.warn(`Unkown watch event type ${item.type}, ignoring`);
-					return;
-				}
-
-				result = result.then(function(data) {
+				enqueue(name, function() {
+					logger.info(`[${name}]: Syncing`);
+					return updateQueue(queue);
+				}).then(function(data) {
 					logger.info(`[${name}]: ${JSON.stringify(data)}`);
 				}, function(err) {
 					logger.error(`[${name}]: ${err.message} (${err.code})`);
 				});
+			}
 
-				// Note that we retain the 'rejected' state here: an existing queue that ended in a rejection
-				// will effectively stay rejected.
-				queuePromises[name] = result;
+			// Start watching the queues from that version on
+			logger.info(`Watching queues at ${resourceVersion}...`);
+			queues.watch(resourceVersion)
+				.on('data', function(item) {
+					const queue = item.object;
+					const name = queue.metadata.name;
 
-				return result;
-			})
-			.on('end', function() {
-				// Restart the watch from the last known version.
-				logger.info('Watch ended, restarting');
-				return mainLoop(resourceVersion);
-			});
+					let next;
+
+					switch (item.type) {
+					case 'ADDED':
+						next = function() {
+							logger.info(`[${name}]: Creating queue`);
+							return createQueue(queue);
+						};
+						break;
+					case 'MODIFIED':
+						next = function() {
+							logger.info(`[${name}]: Updating queue attributes`);
+							return updateQueue(queue);
+						};
+						break;
+					case 'DELETED':
+						next = function() {
+							logger.info(`[${name}]: Deleting queue`);
+							return deleteQueue(queue);
+						};
+						break;
+					case 'ERROR':
+						// Log the message, and continue: usually the stream would end now, but there might be more events
+						// in it that we do want to consume.
+						logger.warn(`Error while watching: ${item.object.message}, ignoring`);
+						return;
+					default:
+						logger.warn(`Unkown watch event type ${item.type}, ignoring`);
+						return;
+					}
+
+					// Note that we retain the 'rejected' state here: an existing queue that ended in a rejection
+					// will effectively stay rejected.
+					const result = enqueue(name, next).then(function(data) {
+						logger.info(`[${name}]: ${JSON.stringify(data)}`);
+					}, function(err) {
+						logger.error(`[${name}]: ${err.message} (${err.code})`);
+					});
+
+					return result;
+				})
+				.on('end', function() {
+					// Restart the watch from the last known version.
+					logger.info('Watch ended, restarting');
+					return mainLoop();
+				});
+		});
 	}
 
 	// Start!
