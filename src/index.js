@@ -110,13 +110,14 @@ k8s(k8sConfig).then(function(k8sClient) {
 
 	function createQueue(queue) {
 		return new Promise(function(resolve, reject) {
-			function handleCreateQueueResponse(err, data) {
+			const attributes = translateQueueAttributes(queue);
+			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
 						// Schedule to retry the operation in 10s
 						logger.info(`[${queue.metadata.name}]: Retrying for recently deleted queue`);
 						return setTimeout(function() {
-							return createQueue(queue).then(data => handleCreateQueueResponse(null, data), err => handleCreateQueueResponse(err, null));
+							return resolve(createQueue(queue));
 						}, 10000);
 					}
 					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
@@ -124,10 +125,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 				}
 
 				return resolve(data);
-			}
-
-			const attributes = translateQueueAttributes(queue);
-			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, handleCreateQueueResponse);
+			});
 		});
 	}
 
