@@ -108,18 +108,40 @@ k8s(k8sConfig).then(function(k8sClient) {
 		}, {});
 	}
 
+	/**
+	 *
+	 * @param {AWSError|Error} err
+	 */
+	function isTransientNetworkError(err) {
+		return err.code === 'NetworkingError' && (err.errno === 'EHOSTUNREACH' || err.errno === 'ECONNREFUSED');
+	}
+
+	/**
+	 * Resolve a promise using the given `resolve` after the `timeout` has passed by retrying `operation` on `queue`.
+	 *
+	 * @param {Function} resolve
+	 * @param {Function} operation
+	 * @param {Number} after
+	 * @param {Queue} queue
+	 */	
+	function resolveRetry(resolve, operation, after, queue, cause) {
+		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after/1000}s`);
+		return setTimeout(function() {
+			return resolve(operation(queue));
+		}, after);
+	}
+
 	function createQueue(queue) {
 		return new Promise(function(resolve, reject) {
 			const attributes = translateQueueAttributes(queue);
 			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
-						// Schedule to retry the operation in 10s
-						logger.info(`[${queue.metadata.name}]: Retrying for recently deleted queue`);
-						return setTimeout(function() {
-							return resolve(createQueue(queue));
-						}, 10000);
+						return resolveRetry(resolve, createQueue, 10000, queue, 'queue recently deleted');
+					} else if (isTransientNetworkError(err)) {
+						return resolveRetry(resolve, createQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
+
 					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
 					return reject(err);
 				}
@@ -138,6 +160,8 @@ k8s(k8sConfig).then(function(k8sClient) {
 						// or has been deleted in the meantime. Create it again.
 						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
 						return resolve(createQueue(queue));
+					} else if (isTransientNetworkError(err)) {
+						return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 					
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
@@ -147,6 +171,10 @@ k8s(k8sConfig).then(function(k8sClient) {
 				const queueUrl = data.QueueUrl;
 				return sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
 					if (err) {
+						if (isTransientNetworkError(err)) {
+							return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
+						}
+
 						logger.warn(`[${queue.metadata.name}]: Cannot determine queue ARN: ${err.message}`);
 						return reject(err);
 					}
@@ -166,6 +194,10 @@ k8s(k8sConfig).then(function(k8sClient) {
 
 					return sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
 						if (err) {
+							if (isTransientNetworkError(err)) {
+								return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
+							}
+
 							logger.warn(`[${queue.metadata.name}]: Cannot update queue attributes: ${err.message}`);
 							return reject(err);
 						}
@@ -181,12 +213,20 @@ k8s(k8sConfig).then(function(k8sClient) {
 		return new Promise(function(resolve, reject) {
 			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
+					if (isTransientNetworkError(err)) {
+						return resolveRetry(resolve, deleteQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
+					}
+					
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
 
 				return sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
 					if (err) {
+						if (isTransientNetworkError(err)) {
+							return resolveRetry(resolve, deleteQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
+						}
+
 						logger.warn(`[${queue.metadata.name}]: Cannot delete queue: ${err.message}`);
 						return reject(err);
 					}
