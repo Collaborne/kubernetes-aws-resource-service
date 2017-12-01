@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const AWS = require('aws-sdk');
 
+const k8s = require('auto-kubernetes-client');
+
 const logger = require('log4js').getLogger();
 
 const argv = yargs
@@ -16,54 +18,57 @@ const argv = yargs
 	.alias('key', 'client-key').describe('client-key', 'Path to a client key file for TLS')
 	.boolean('insecure-skip-tls-verify').describe('insecure-skip-tls-verify', 'If true, the server\'s certificate will not be checked for validity. This will make your HTTPS connections insecure')
 	.describe('token', 'Bearer token for authentication to the API server')
-	.describe('namespace', 'The namespace to watch')
+	.describe('namespace', 'The namespace to watch').demandOption('namespace')
 	.help()
 	.argv;
 
-/** The basic configuration for accessing the API server */
-let k8sConfig;
-if (argv.server) {
-	const fs = require('fs');
+/**
+ * Creates basic configuration for accessing the Kubernetes API server
+ *
+ * @param {Object} argv Command line arguments
+ * @returns {Object} Kubernetes client configuration
+ */
+function createK8sConfig(argv) {
+	let k8sConfig;
+	if (argv.server) {
+		// For local development
+		k8sConfig = {
+			url: argv.server,
+			insecureSkipTlsVerify: argv.insecureSkipTlsVerify
+		};
+		if (argv.certificateAuthority) {
+			k8sConfig.ca = fs.readFileSync(argv.certificateAuthority, 'utf8');
+		}
+		if (argv.token) {
+			k8sConfig.auth = { bearer: argv.token };
+		} else if (argv.username && argv.password) {
+			k8sConfig.auth = { user: argv.username, pass: argv.password };
+		} else if (argv.clientCertificate && argv.clientKey) {
+			k8sConfig.cert = fs.readFileSync(argv.clientCertificate, 'utf8');
+			k8sConfig.key = fs.readFileSync(argv.clientKey, 'utf8');
+		}
+	} else if (process.env.KUBERNETES_SERVICE_HOST) {
+		// Runs in Kubernetes
+		const credentialsPath = '/var/run/secrets/kubernetes.io/serviceaccount/';
+		k8sConfig = {
+			url: `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`,
+			ca: fs.readFileSync(path.resolve(credentialsPath, 'ca.crt'), 'utf8'),
+			auth: { bearer: fs.readFileSync(path.resolve(credentialsPath, 'token'), 'utf8') }
+		}
+	} else {
+		throw new Error('Unknown Kubernetes API server');
+	}
 
-	k8sConfig = {
-		url: argv.server,
-		insecureSkipTlsVerify: argv.insecureSkipTlsVerify
-	};
-	if (argv.certificateAuthority) {
-		k8sConfig.ca = fs.readFileSync(argv.certificateAuthority, 'utf8');
-	}
-	if (argv.token) {
-		k8sConfig.auth = { bearer: argv.token };
-	} else if (argv.username && argv.password) {
-		k8sConfig.auth = { user: argv.username, pass: argv.password };
-	} else if (argv.clientCertificate && argv.clientKey) {
-		k8sConfig.cert = fs.readFileSync(argv.clientCertificate, 'utf8');
-		k8sConfig.key = fs.readFileSync(argv.clientKey, 'utf8');
-	}
-} else if (process.env.KUBERNETES_SERVICE_HOST) {
-	const credentialsPath = '/var/run/secrets/kubernetes.io/serviceaccount/';
-	k8sConfig = {
-		url: `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`,
-		ca: fs.readFileSync(path.resolve(credentialsPath, 'ca.crt'), 'utf8'),
-		auth: { bearer: fs.readFileSync(path.resolve(credentialsPath, 'token'), 'utf8') }
-	}
-} else {
-	logger.error('Unknown Kubernetes API server');
-	process.exit(1);
+	return k8sConfig;
 }
 
-const k8s = require('auto-kubernetes-client');
+// TODO: Move into Plugin
 const sqs = new AWS.SQS({
 	endpoint: process.env.AWS_SQS_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION,
 });
 
-if (!argv.namespace) {
-	// FIXME: How to do watching without namespace (i.e. "all namespaces")
-	logger.error('Must provide a namespace using --namespace');
-	process.exit(1);
-}
-
+const k8sConfig = createK8sConfig(argv);
 k8s(k8sConfig).then(function(k8sClient) {
 	/**
 	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
@@ -123,7 +128,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 	 * @param {Function} operation
 	 * @param {Number} after
 	 * @param {Queue} queue
-	 */	
+	 */
 	function resolveRetry(resolve, operation, after, queue, cause) {
 		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after/1000}s`);
 		return setTimeout(function() {
@@ -163,7 +168,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 					} else if (isTransientNetworkError(err)) {
 						return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
-					
+
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
@@ -190,7 +195,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 						logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
 						return resolve();
 					}
-					
+
 
 					return sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
 						if (err) {
@@ -216,7 +221,7 @@ k8s(k8sConfig).then(function(k8sClient) {
 					if (isTransientNetworkError(err)) {
 						return resolveRetry(resolve, deleteQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
-					
+
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
