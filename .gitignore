@@ -1,5 +1,8 @@
 /node_modules/
 /deploy/
 npm-debug.log
+
 npm-shrinkwrap.json
+package-lock.json
+yarn.lock
 
