@@ -67,6 +67,7 @@ const sqsClientOptions = {
 };
 
 const SQSQueue = require('./resources/sqs');
+const PromisesQueue = require('./promises-queue');
 
 const k8sConfig = createK8sConfig(argv);
 k8s(k8sConfig).then(function onConnected(k8sClient) {
@@ -77,21 +78,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 		resourceClient: new SQSQueue(sqsClientOptions)
 	}];
 
-	/**
-	 * Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
-	 *
-	 * @type {Object.<string,Promise<any>>}
-	 */
-	const queuePromises = {};
-
-	function enqueue(name, next) {
-		// Enqueue the request to happen when the previous request is done.
-		const previousPromise = queuePromises[name] || Promise.resolve();
-
-		return queuePromises[name] = previousPromise.then(next);
-	}
-
-	function resourceLoop(type, k8sResourceClient, resourceClient) {
+	function resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue) {
 		k8sResourceClient.list()
 			.then(list => {
 				const resourceVersion = list.metadata.resourceVersion;
@@ -99,7 +86,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 				// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
 				for (const resource of list.items) {
 					const name = resource.metadata.name;
-					enqueue(name, function() {
+					promisesQueue.enqueue(name, function() {
 						logger.info(`[${name}]: Syncing`);
 						return resourceClient.update(resource);
 					}).then(function(data) {
@@ -151,7 +138,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 
 						// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
 						// will effectively stay rejected.
-						const result = enqueue(name, next).then(function(data) {
+						const result = promisesQueue.enqueue(name, next).then(function(data) {
 							logger.info(`[${name}]: ${JSON.stringify(data)}`);
 						}, function(err) {
 							logger.error(`[${name}]: ${err.message} (${err.code})`);
@@ -162,7 +149,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 					.on('end', function() {
 						// Restart the watch from the last known version.
 						logger.info('Watch ended, restarting');
-						return resourceLoop(type, k8sResourceClient, resourceClient);
+						return resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue);
 					});
 			})
 	}
@@ -170,7 +157,8 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 	resourceDescriptions.forEach(resourceDescription => {
 		const k8sResourceClient = awsResourcesClient[resourceDescription.type];
 		if (k8sResourceClient) {
-			resourceLoop(resourceDescription.type, resourceDescription.k8sResourceClient, resourceDescription.resourceClient);
+			const promisesQueue = new PromisesQueue();
+			resourceLoop(resourceDescription.type, resourceDescription.k8sResourceClient, resourceDescription.resourceClient, promisesQueue);
 		} else {
 			console.error(`Resources of type ${resourceDescription.type} are not defined as Kubernetes ThirdPartyResource. Available ThirdPartyResources ${Object.keys(awsResourcesClient)}.`);
 		}
