@@ -5,7 +5,6 @@
 const yargs = require('yargs');
 const fs = require('fs');
 const path = require('path');
-const AWS = require('aws-sdk');
 
 const k8s = require('auto-kubernetes-client');
 
@@ -62,188 +61,27 @@ function createK8sConfig(argv) {
 	return k8sConfig;
 }
 
-// TODO: Move into Plugin
-const sqs = new AWS.SQS({
+const sqsClientOptions = {
 	endpoint: process.env.AWS_SQS_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION,
-});
+};
+
+const SQSQueue = require('./resources/sqs');
 
 const k8sConfig = createK8sConfig(argv);
-k8s(k8sConfig).then(function(k8sClient) {
-	/**
-	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
-	 *
-	 * @param {Object} queue a queue definition
-	 * @param {String} [queueArn] the ARN of the queue
-	 * @return {Object} the queue attributes
-	 */
-	function translateQueueAttributes(queue, queueArn) {
-		function capitalize(s) {
-			return s[0].toUpperCase() + s.substring(1);
-		}
+k8s(k8sConfig).then(function onConnected(k8sClient) {
+	const awsResourcesClient = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace);
 
-		return Object.keys(queue.spec || {}).reduce((result, key) => {
-			const value = queue.spec[key];
-			let resultValue;
-			switch (key) {
-			case 'redrivePolicy':
-				resultValue = JSON.stringify(value);
-				break;
-			case 'policy':
-				// Inject the queue ARN as 'Resource' into all statements of the policy
-				let policy;
-				if (queueArn) {
-					logger.debug(`[${queue.metadata.name}]: Injecting resource ARN ${queueArn} into policy document`)
-					policy = Object.assign({}, value, { Statement: (value.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement)) });
-				} else {
-					policy = value;
-				}
-
-				resultValue = JSON.stringify(policy);
-				break;
-			default:
-				// Convert to string
-				resultValue = `${value}`;
-				break;
-			}
-			logger.debug(`[${queue.metadata.name}]: Attribute ${key} = ${resultValue}`);
-
-			result[capitalize(key)] = resultValue;
-			return result;
-		}, {});
-	}
+	const resourceDescriptions = [{
+		type: 'queues',
+		resourceClient: new SQSQueue(sqsClientOptions)
+	}];
 
 	/**
+	 * Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
 	 *
-	 * @param {AWSError|Error} err
+	 * @type {Object.<string,Promise<any>>}
 	 */
-	function isTransientNetworkError(err) {
-		return err.code === 'NetworkingError' && (err.errno === 'EHOSTUNREACH' || err.errno === 'ECONNREFUSED');
-	}
-
-	/**
-	 * Resolve a promise using the given `resolve` after the `timeout` has passed by retrying `operation` on `queue`.
-	 *
-	 * @param {Function} resolve
-	 * @param {Function} operation
-	 * @param {Number} after
-	 * @param {Queue} queue
-	 */
-	function resolveRetry(resolve, operation, after, queue, cause) {
-		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after/1000}s`);
-		return setTimeout(function() {
-			return resolve(operation(queue));
-		}, after);
-	}
-
-	function createQueue(queue) {
-		return new Promise(function(resolve, reject) {
-			const attributes = translateQueueAttributes(queue);
-			return sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
-				if (err) {
-					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
-						return resolveRetry(resolve, createQueue, 10000, queue, 'queue recently deleted');
-					} else if (isTransientNetworkError(err)) {
-						return resolveRetry(resolve, createQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
-					return reject(err);
-				}
-
-				return resolve(data);
-			});
-		});
-	}
-
-	function updateQueue(queue) {
-		return new Promise(function(resolve, reject) {
-			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
-				if (err) {
-					if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
-						// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
-						// or has been deleted in the meantime. Create it again.
-						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
-						return resolve(createQueue(queue));
-					} else if (isTransientNetworkError(err)) {
-						return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
-					return reject(err);
-				}
-
-				const queueUrl = data.QueueUrl;
-				return sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
-					if (err) {
-						if (isTransientNetworkError(err)) {
-							return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-						}
-
-						logger.warn(`[${queue.metadata.name}]: Cannot determine queue ARN: ${err.message}`);
-						return reject(err);
-					}
-
-					const attributes = translateQueueAttributes(queue, data.Attributes.QueueArn);
-					if (Object.keys(attributes).length === 0) {
-						// The API requires that we provide attributes when trying to update attributes.
-						// If the caller intended to set values to their defaults, then they must be explicit and
-						// provide these values. In other words: AWS SQS copies the defaults at creation time, and
-						// afterwards there is no such thing as a "default" anymore.
-						// From our side though this is not an error, but we merely ignore the request.
-						// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
-						logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
-						return resolve();
-					}
-
-
-					return sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
-						if (err) {
-							if (isTransientNetworkError(err)) {
-								return resolveRetry(resolve, updateQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-							}
-
-							logger.warn(`[${queue.metadata.name}]: Cannot update queue attributes: ${err.message}`);
-							return reject(err);
-						}
-
-						return resolve(data);
-					});
-				});
-			});
-		});
-	}
-
-	function deleteQueue(queue) {
-		return new Promise(function(resolve, reject) {
-			return sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
-				if (err) {
-					if (isTransientNetworkError(err)) {
-						return resolveRetry(resolve, deleteQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
-					return reject(err);
-				}
-
-				return sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
-					if (err) {
-						if (isTransientNetworkError(err)) {
-							return resolveRetry(resolve, deleteQueue, 30000, queue, `transient ${err.code} ${err.errno}`);
-						}
-
-						logger.warn(`[${queue.metadata.name}]: Cannot delete queue: ${err.message}`);
-						return reject(err);
-					}
-
-					return resolve(data);
-				});
-			});
-		});
-	}
-
-	const queues = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace).queues;
-	// Known promises for queues, used to synchronize requests and avoid races between delayed creations and modifications.
 	const queuePromises = {};
 
 	function enqueue(name, next) {
@@ -253,85 +91,90 @@ k8s(k8sConfig).then(function(k8sClient) {
 		return queuePromises[name] = previousPromise.then(next);
 	}
 
-	/**
-	 * Main loop
-	 */
-	function mainLoop() {
-		// List all known queues
-		queues.list().then(list => {
-			const resourceVersion = list.metadata.resourceVersion;
+	function resourceLoop(type, k8sResourceClient, resourceClient) {
+		k8sResourceClient.list()
+			.then(list => {
+				const resourceVersion = list.metadata.resourceVersion;
 
-			// Treat all queues we see as "update", which will trigger a creation/update of attributes accordingly.
-			for (const queue of list.items) {
-				const name = queue.metadata.name;
-				enqueue(name, function() {
-					logger.info(`[${name}]: Syncing`);
-					return updateQueue(queue);
-				}).then(function(data) {
-					logger.info(`[${name}]: ${JSON.stringify(data)}`);
-				}, function(err) {
-					logger.error(`[${name}]: ${err.message} (${err.code})`);
-				});
-			}
-
-			// Start watching the queues from that version on
-			logger.info(`Watching queues at ${resourceVersion}...`);
-			queues.watch(resourceVersion)
-				.on('data', function(item) {
-					const queue = item.object;
-					const name = queue.metadata.name;
-
-					let next;
-
-					switch (item.type) {
-					case 'ADDED':
-						next = function() {
-							logger.info(`[${name}]: Creating queue`);
-							return createQueue(queue);
-						};
-						break;
-					case 'MODIFIED':
-						next = function() {
-							logger.info(`[${name}]: Updating queue attributes`);
-							return updateQueue(queue);
-						};
-						break;
-					case 'DELETED':
-						next = function() {
-							logger.info(`[${name}]: Deleting queue`);
-							return deleteQueue(queue);
-						};
-						break;
-					case 'ERROR':
-						// Log the message, and continue: usually the stream would end now, but there might be more events
-						// in it that we do want to consume.
-						logger.warn(`Error while watching: ${item.object.message}, ignoring`);
-						return;
-					default:
-						logger.warn(`Unkown watch event type ${item.type}, ignoring`);
-						return;
-					}
-
-					// Note that we retain the 'rejected' state here: an existing queue that ended in a rejection
-					// will effectively stay rejected.
-					const result = enqueue(name, next).then(function(data) {
+				// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
+				for (const resource of list.items) {
+					const name = resource.metadata.name;
+					enqueue(name, function() {
+						logger.info(`[${name}]: Syncing`);
+						return resourceClient.update(resource);
+					}).then(function(data) {
 						logger.info(`[${name}]: ${JSON.stringify(data)}`);
 					}, function(err) {
 						logger.error(`[${name}]: ${err.message} (${err.code})`);
 					});
+				}
 
-					return result;
-				})
-				.on('end', function() {
-					// Restart the watch from the last known version.
-					logger.info('Watch ended, restarting');
-					return mainLoop();
-				});
-		});
+				return resourceVersion;
+			}).then(resourceVersion => {
+				// Start watching the resources from that version on
+				logger.info(`Watching ${type} at ${resourceVersion}...`);
+				k8sResourceClient.watch(resourceVersion)
+					.on('data', function(item) {
+						const resource = item.object;
+						const name = resource.metadata.name;
+
+						let next;
+
+						switch (item.type) {
+						case 'ADDED':
+							next = function() {
+								logger.info(`[${name}]: Creating resource`);
+								return resourceClient.create(resource);
+							};
+							break;
+						case 'MODIFIED':
+							next = function() {
+								logger.info(`[${name}]: Updating resource attributes`);
+								return resourceClient.update(resource);
+							};
+							break;
+						case 'DELETED':
+							next = function() {
+								logger.info(`[${name}]: Deleting resource`);
+								return resourceClient.delete(resource);
+							};
+							break;
+						case 'ERROR':
+							// Log the message, and continue: usually the stream would end now, but there might be more events
+							// in it that we do want to consume.
+							logger.warn(`Error while watching: ${item.object.message}, ignoring`);
+							return;
+						default:
+							logger.warn(`Unkown watch event type ${item.type}, ignoring`);
+							return;
+						}
+
+						// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
+						// will effectively stay rejected.
+						const result = enqueue(name, next).then(function(data) {
+							logger.info(`[${name}]: ${JSON.stringify(data)}`);
+						}, function(err) {
+							logger.error(`[${name}]: ${err.message} (${err.code})`);
+						});
+
+						return result;
+					})
+					.on('end', function() {
+						// Restart the watch from the last known version.
+						logger.info('Watch ended, restarting');
+						return resourceLoop(type, k8sResourceClient, resourceClient);
+					});
+			})
 	}
 
-	// Start!
-	mainLoop();
+	resourceDescriptions.forEach(resourceDescription => {
+		const k8sResourceClient = awsResourcesClient[resourceDescription.type];
+		if (k8sResourceClient) {
+			resourceLoop(resourceDescription.type, resourceDescription.k8sResourceClient, resourceDescription.resourceClient);
+		} else {
+			console.error(`Resources of type ${resourceDescription.type} are not defined as Kubernetes ThirdPartyResource. Available ThirdPartyResources ${Object.keys(awsResourcesClient)}.`);
+		}
+	});
 }).catch(function(err) {
 	logger.error(`Uncaught error, aborting: ${err.message}`);
 	process.exit(1);
