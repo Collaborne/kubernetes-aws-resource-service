@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {capitalize, isTransientNetworkError} = require('./utils');
+const {capitalize, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
 
@@ -100,9 +100,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	 */
 	resolveRetry(resolve, operation, after, queue, cause) {
 		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after/1000}s`);
-		return setTimeout(function() {
-			return resolve(operation(queue));
-		}, after);
+		return delay(after).then(() => resolve(operation(queue)));
 	}
 
 	/**

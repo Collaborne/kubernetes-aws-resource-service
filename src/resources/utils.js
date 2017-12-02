@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 /**
  * Determine whether the given error is a (likely) transient network error
  *
@@ -18,8 +20,28 @@ function capitalize(s) {
 	return s[0].toUpperCase() + s.substring(1);
 }
 
+function md5(data) {
+	return crypto.createHash('md5').update(data).digest('hex');
+}
+
+/**
+ * Resolve a promise after the `timeout` has passed.
+ *
+ * @param {Number} after timeout in milliseconds
+ * @return {Promise<void>} promise resolved after timeout
+ */
+function delay(after) {
+	return new Promise(resolve => {
+		return setTimeout(() => {
+			return resolve();
+		}, after);
+	});
+}
+
 module.exports = {
 	capitalize,
-	isTransientNetworkError
+	delay,
+	isTransientNetworkError,
+	md5
 };
 
