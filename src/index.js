@@ -85,10 +85,12 @@ const server = http.createServer(app);
 const listener = server.listen(argv.port, () => {
 	const k8sConfig = createK8sConfig(argv);
 	k8s(k8sConfig).then(function onConnected(k8sClient) {
-		const resourceDescriptions = [{
-			resourceClient: new SQSQueue(sqsClientOptions),
-			type: 'queues',
-		}];
+		const resourceDescriptions = [
+			{
+				resourceClient: new SQSQueue(sqsClientOptions),
+				type: 'queues',
+			}
+		];
 
 		function resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue) {
 			return resourceK8sClient.list()
