@@ -1,5 +1,7 @@
 const AWS = require('aws-sdk');
 
+const {isTransientNetworkError} = require('./utils');
+
 const logger = require('log4js').getLogger('SQSQueue');
 
 /**
@@ -85,16 +87,6 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	}
 
 	/**
-	 * Determine whether the given error is a (likely) transient network error
-	 *
-	 * @param {AWSError|Error} err the error to check
-	 * @return {boolean} `true` if the provided error is a (likely) transient network error
-	 */
-	isTransientNetworkError(err) {
-		return err.code === 'NetworkingError' && (err.errno === 'EHOSTUNREACH' || err.errno === 'ECONNREFUSED');
-	}
-
-	/**
 	 * Resolve a promise using the given `resolve` after the `timeout` has passed by retrying `operation` on `queue`.
 	 *
 	 * @param {Function} resolve
@@ -121,7 +113,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
 						return self.resolveRetry(resolve, self.create.bind(self), 10000, queue, 'queue recently deleted');
-					} else if (this.isTransientNetworkError(err)) {
+					} else if (isTransientNetworkError(err)) {
 						return self.resolveRetry(resolve, self.create.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
@@ -148,7 +140,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 						// or has been deleted in the meantime. Create it again.
 						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
 						return resolve(self.create(queue));
-					} else if (self.isTransientNetworkError(err)) {
+					} else if (isTransientNetworkError(err)) {
 						return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
@@ -159,7 +151,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 				const queueUrl = data.QueueUrl;
 				return self.sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
 					if (err) {
-						if (self.isTransientNetworkError(err)) {
+						if (isTransientNetworkError(err)) {
 							return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 						}
 
@@ -182,7 +174,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 
 					return self.sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
 						if (err) {
-							if (self.isTransientNetworkError(err)) {
+							if (isTransientNetworkError(err)) {
 								return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 							}
 
@@ -207,7 +199,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 		return new Promise(function(resolve, reject) {
 			return self.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
-					if (self.isTransientNetworkError(err)) {
+					if (isTransientNetworkError(err)) {
 						return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
@@ -217,7 +209,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 
 				return self.sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
 					if (err) {
-						if (self.isTransientNetworkError(err)) {
+						if (isTransientNetworkError(err)) {
 							return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 						}
 
