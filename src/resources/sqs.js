@@ -2,19 +2,49 @@ const AWS = require('aws-sdk');
 
 const logger = require('log4js').getLogger('SQSQueue');
 
-class SQSQueue {
+/**
+ * A queue resource in Kubernetes
+ *
+ * @typedef Queue
+ * @property {KubernetesMetadata} metadata
+ * @property {QueueSpec} spec
+ * @property {QueueStatus} status
+ */
+
+/**
+ * Kubernetes resource metadata
+ *
+ * @typedef KubernetesMetadata
+ * @property {String} namespace
+ * @property {String} name
+ * @property {Object.<String,String>} labels
+ * @property {Object.<String,String>} metadata
+ */
+
+/**
+ * A queue specification
+ *
+ * @typedef QueueSpec
+ * @property {Object} [redrivePolicy]
+ * @property {Object} [policy]
+ */
+
+/**
+ * A adapter for modifying AWS SQS queues using Queue definitions
+ */
+class SQSQueue { // eslint-disable-line padded-blocks
 	/**
 	 *
-	 * @param {Object} SQS client options
+	 * @param {Object} [options] SQS client options
 	 */
-	constructor(options) {
+	constructor(options = {}) {
 		this.sqs = new AWS.SQS(Object.assign({}, options));
 	}
 
 	/**
 	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
 	 *
-	 * @param {Object} queue a queue definition
+	 * @param {Queue} queue a queue definition
 	 * @param {String} [queueArn] the ARN of the queue
 	 * @return {Object} the queue attributes
 	 */
@@ -55,8 +85,10 @@ class SQSQueue {
 	}
 
 	/**
+	 * Determine whether the given error is a (likely) transient network error
 	 *
-	 * @param {AWSError|Error} err
+	 * @param {AWSError|Error} err the error to check
+	 * @return {boolean} `true` if the provided error is a (likely) transient network error
 	 */
 	isTransientNetworkError(err) {
 		return err.code === 'NetworkingError' && (err.errno === 'EHOSTUNREACH' || err.errno === 'ECONNREFUSED');
@@ -79,7 +111,7 @@ class SQSQueue {
 
 	/**
 	 *
-	 * @param {Object} queue Queue definition in Kubernetes
+	 * @param {Queue} queue Queue definition in Kubernetes
 	 */
 	create(queue) {
 		const self = this;
@@ -104,7 +136,7 @@ class SQSQueue {
 
 	/**
 	 * Updates SQS queue
-	 * @param {Object} queue Queue definition in Kubernetes
+	 * @param {Queue} queue Queue definition in Kubernetes
 	 */
 	update(queue) {
 		const self = this;
@@ -167,7 +199,8 @@ class SQSQueue {
 
 	/**
 	 * Delete SQS queue
-	 * @param {Object} queue Queue definition in Kubernetes
+	 *
+	 * @param {Queue} queue Queue definition in Kubernetes
 	 */
 	delete(queue) {
 		const self = this;
