@@ -44,6 +44,23 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	}
 
 	/**
+	 * Inject the queue ARN as 'Resource' into all statements of the policy
+	 *
+	 * @param {String} queueName name of the queue
+	 * @param {Object} policy a policy
+	 * @param {String} [queueArn] a queue ARN to attempt to inject
+	 * @return {Object} the policy, with the ARN injected if possible
+	 */
+	_injectQueueArn(queueName, policy, queueArn) {
+		if (!queueArn) {
+			return policy;
+		}
+
+		logger.debug(`[${queueName}]: Injecting resource ARN ${queueArn} into policy document`)
+		return Object.assign({}, policy, { Statement: (policy.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement)) });
+	}
+
+	/**
 	 * Convert the queue.spec parts from camelCase to AWS CapitalCase.
 	 *
 	 * @param {Queue} queue a queue definition
@@ -59,16 +76,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 				resultValue = JSON.stringify(value);
 				break;
 			case 'policy':
-				// Inject the queue ARN as 'Resource' into all statements of the policy
-				let policy;
-				if (queueArn) {
-					logger.debug(`[${queue.metadata.name}]: Injecting resource ARN ${queueArn} into policy document`)
-					policy = Object.assign({}, value, { Statement: (value.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement)) });
-				} else {
-					policy = value;
-				}
-
-				resultValue = JSON.stringify(policy);
+				resultValue = JSON.stringify(this._injectQueueArn(queue.metadata.name, value, queueArn));
 				break;
 			default:
 				// Convert to string
