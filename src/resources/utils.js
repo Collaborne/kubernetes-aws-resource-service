@@ -8,7 +8,18 @@ function isTransientNetworkError(err) {
 	return err.code === 'NetworkingError' && (err.errno === 'EHOSTUNREACH' || err.errno === 'ECONNREFUSED');
 }
 
+/**
+ * Capitalize the given string `s`
+ *
+ * @param {String} s the string to capitalize
+ * @return {String} `s` capitalized
+ */
+function capitalize(s) {
+	return s[0].toUpperCase() + s.substring(1);
+}
+
 module.exports = {
+	capitalize,
 	isTransientNetworkError
 };
 

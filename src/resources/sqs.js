@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {isTransientNetworkError} = require('./utils');
+const {capitalize, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
 
@@ -51,10 +51,6 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	 * @return {Object} the queue attributes
 	 */
 	translateQueueAttributes(queue, queueArn) {
-		function capitalize(s) {
-			return s[0].toUpperCase() + s.substring(1);
-		}
-
 		return Object.keys(queue.spec || {}).reduce((result, key) => {
 			const value = queue.spec[key];
 			let resultValue;
