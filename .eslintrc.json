@@ -23,7 +23,6 @@
 		{
 			"files": [
 				"src/index.js",
-				"src/promises-queue.js",
 				"src/resources/sqs.js"
 			],
 			"rules": {
