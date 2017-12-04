@@ -20,6 +20,24 @@ function capitalize(s) {
 	return s[0].toUpperCase() + s.substring(1);
 }
 
+function capitalizeFieldNames(object) {
+	if (!object) {
+		return object;
+	}
+
+	return Object.keys(object).reduce((result, key) => {
+		let value = object[key];
+		if (Array.isArray(value)) {
+			value = value.map(item => capitalizeFieldNames(item));
+		} else if (typeof value === 'object') {
+			value = capitalizeFieldNames(value);
+		}
+
+		result[capitalize(key)] = value;
+		return result;
+	}, {});
+}
+
 function md5(data) {
 	return crypto.createHash('md5').update(data).digest('hex');
 }
@@ -40,6 +58,7 @@ function delay(after) {
 
 module.exports = {
 	capitalize,
+	capitalizeFieldNames,
 	delay,
 	isTransientNetworkError,
 	md5

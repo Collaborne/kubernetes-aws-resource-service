@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {capitalize, delay, isTransientNetworkError} = require('./utils');
+const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
 
@@ -73,10 +73,10 @@ class SQSQueue { // eslint-disable-line padded-blocks
 			let resultValue;
 			switch (key) {
 			case 'redrivePolicy':
-				resultValue = JSON.stringify(value);
+				resultValue = JSON.stringify(capitalizeFieldNames(value));
 				break;
 			case 'policy':
-				resultValue = JSON.stringify(this._injectQueueArn(queue.metadata.name, value, queueArn));
+				resultValue = JSON.stringify(this._injectQueueArn(queue.metadata.name, capitalizeFieldNames(value), queueArn));
 				break;
 			default:
 				// Convert to string
