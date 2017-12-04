@@ -74,8 +74,13 @@ const sqsClientOptions = {
 	endpoint: process.env.AWS_SQS_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION,
 };
+const iamClientOptions = {
+	endpoint: process.env.AWS_IAM_ENDPOINT_URL_OVERRIDE,
+	region: process.env.AWS_REGION
+};
 
 const SQSQueue = require('./resources/sqs');
+const IAMRole = require('./resources/iam');
 const PromisesQueue = require('./promises-queue');
 
 // Set up the express server for /metrics
@@ -90,6 +95,9 @@ const listener = server.listen(argv.port, () => {
 			{
 				resourceClient: new SQSQueue(sqsClientOptions),
 				type: 'queues',
+			}, {
+				resourceClient: new IAMRole(iamClientOptions),
+				type: 'roles',
 			}
 		].filter(resourceDescription => argv.resourceTypes.length === 0 || argv.resourceTypes.indexOf(resourceDescription.type) !== -1);
 		logger.debug(`Enabled resource types: ${resourceDescriptions.map(resourceDescription => resourceDescription.type)}`);

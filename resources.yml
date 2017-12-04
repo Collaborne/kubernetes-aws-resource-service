@@ -10,3 +10,11 @@ description: "A specification of a SQS queue"
 versions:
 - name: v1
 ---
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+metadata:
+  name: role.aws.k8s.collaborne.com
+description: "A specification of an IAM role"
+versions:
+- name: v1
+---
