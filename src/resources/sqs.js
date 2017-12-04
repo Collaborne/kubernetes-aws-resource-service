@@ -82,14 +82,15 @@ class SQSQueue {
 	 * @param {Object} queue Queue definition in Kubernetes
 	 */
 	create(queue) {
+		const self = this;
 		return new Promise(function(resolve, reject) {
-			const attributes = this.translateQueueAttributes(queue);
-			return this.sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
+			const attributes = self.translateQueueAttributes(queue);
+			return self.sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
-						return this.resolveRetry(resolve, this.create, 10000, queue, 'queue recently deleted');
+						return self.resolveRetry(resolve, self.create.bind(self), 10000, queue, 'queue recently deleted');
 					} else if (this.isTransientNetworkError(err)) {
-						return this.resolveRetry(resolve, this.create, 30000, queue, `transient ${err.code} ${err.errno}`);
+						return self.resolveRetry(resolve, self.create.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
 					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
@@ -106,16 +107,17 @@ class SQSQueue {
 	 * @param {Object} queue Queue definition in Kubernetes
 	 */
 	update(queue) {
+		const self = this;
 		return new Promise(function(resolve, reject) {
-			return this.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
+			return self.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
 						// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
 						// or has been deleted in the meantime. Create it again.
 						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
-						return resolve(this.create(queue));
-					} else if (this.isTransientNetworkError(err)) {
-						return this.resolveRetry(resolve, this.update, 30000, queue, `transient ${err.code} ${err.errno}`);
+						return resolve(self.create(queue));
+					} else if (self.isTransientNetworkError(err)) {
+						return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
@@ -123,17 +125,17 @@ class SQSQueue {
 				}
 
 				const queueUrl = data.QueueUrl;
-				return this.sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
+				return self.sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
 					if (err) {
-						if (this.isTransientNetworkError(err)) {
-							return this.resolveRetry(resolve, this.update, 30000, queue, `transient ${err.code} ${err.errno}`);
+						if (self.isTransientNetworkError(err)) {
+							return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 						}
 
 						logger.warn(`[${queue.metadata.name}]: Cannot determine queue ARN: ${err.message}`);
 						return reject(err);
 					}
 
-					const attributes = this.translateQueueAttributes(queue, data.Attributes.QueueArn);
+					const attributes = self.translateQueueAttributes(queue, data.Attributes.QueueArn);
 					if (Object.keys(attributes).length === 0) {
 						// The API requires that we provide attributes when trying to update attributes.
 						// If the caller intended to set values to their defaults, then they must be explicit and
@@ -146,10 +148,10 @@ class SQSQueue {
 					}
 
 
-					return this.sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
+					return self.sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
 						if (err) {
-							if (this.isTransientNetworkError(err)) {
-								return this.resolveRetry(resolve, this.update, 30000, queue, `transient ${err.code} ${err.errno}`);
+							if (self.isTransientNetworkError(err)) {
+								return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 							}
 
 							logger.warn(`[${queue.metadata.name}]: Cannot update queue attributes: ${err.message}`);
@@ -168,21 +170,22 @@ class SQSQueue {
 	 * @param {Object} queue Queue definition in Kubernetes
 	 */
 	delete(queue) {
+		const self = this;
 		return new Promise(function(resolve, reject) {
-			return this.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
+			return self.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
 				if (err) {
-					if (this.isTransientNetworkError(err)) {
-						return this.resolveRetry(resolve, this.delete, 30000, queue, `transient ${err.code} ${err.errno}`);
+					if (self.isTransientNetworkError(err)) {
+						return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 					}
 
 					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
 					return reject(err);
 				}
 
-				return this.sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
+				return self.sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
 					if (err) {
-						if (this.isTransientNetworkError(err)) {
-							return this.resolveRetry(resolve, this.delete, 30000, queue, `transient ${err.code} ${err.errno}`);
+						if (self.isTransientNetworkError(err)) {
+							return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
 						}
 
 						logger.warn(`[${queue.metadata.name}]: Cannot delete queue: ${err.message}`);
