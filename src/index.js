@@ -158,7 +158,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 		const k8sResourceClient = awsResourcesClient[resourceDescription.type];
 		if (k8sResourceClient) {
 			const promisesQueue = new PromisesQueue();
-			resourceLoop(resourceDescription.type, resourceDescription.k8sResourceClient, resourceDescription.resourceClient, promisesQueue);
+			resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue);
 		} else {
 			console.error(`Resources of type ${resourceDescription.type} are not defined as Kubernetes ThirdPartyResource. Available ThirdPartyResources ${Object.keys(awsResourcesClient)}.`);
 		}
