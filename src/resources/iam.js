@@ -119,13 +119,39 @@ class IAMRole { // eslint-disable-line padded-blocks
 			});
 	}
 
+	_reportRoleError(roleName, err, description) {
+		logger.warn(`[${roleName}]: ${description}: ${err.message}`);
+		throw new Error(`${description}: ${err.message}`);
+	}
+
+	_getRole(roleName) {
+		const request = {
+			RoleName: roleName
+		};
+		return this._retryOnTransientNetworkErrors('IAM::GetRole', this.iam.getRole, [request])
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot get role'));
+	}
+
 	_createRole(roleName, attributes) {
 		const request = Object.assign({}, attributes, {RoleName: roleName});
 		return this._retryOnTransientNetworkErrors('IAM::CreateRole', this.iam.createRole, [request])
-			.catch(err => {
-				logger.warn(`[${roleName}]: Cannot create role: ${err.message}`);
-				throw new Error(`Cannot create role: ${err.message}`);
-			});
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot create role'));
+	}
+
+	_deleteRole(roleName) {
+		const request = {
+			RoleName: roleName
+		};
+		return this._retryOnTransientNetworkErrors('IAM::DeleteRole', this.iam.deleteRole, [request])
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot delete role'));
+	}
+
+	_listRolePolicies(roleName) {
+		const request = {
+			RoleName: roleName
+		};
+		return this._retryOnTransientNetworkErrors('IAM::ListRolePolicies', this.iam.listRolePolicies, [request])
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot list role policies'));
 	}
 
 	_putRolePolicy(roleName, policy) {
@@ -136,10 +162,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 			RoleName: roleName,
 		};
 		return this._retryOnTransientNetworkErrors('IAM::PutRolePolicy', this.iam.putRolePolicy, [request])
-			.catch(err => {
-				logger.warn(`[${roleName}]: Cannot put role policy ${policyName}: ${err.message}`);
-				throw new Error(`Cannot put role policy: ${err.message}`);
-			});
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot put role policy'));
 	}
 
 	_deleteRolePolicy(roleName, policyName) {
@@ -148,10 +171,25 @@ class IAMRole { // eslint-disable-line padded-blocks
 			RoleName: roleName,
 		};
 		return this._retryOnTransientNetworkErrors('IAM::DeleteRolePolicy', this.iam.deleteRolePolicy, [request])
-			.catch(err => {
-				logger.warn(`[${roleName}]: Cannot delete role policy: ${err.message}`);
-				throw new Error(`Cannot delete role policy: ${err.message}`);
-			});
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot delete role policy'));
+	}
+
+	_updateRoleDescription(roleName, description) {
+		const request = {
+			Description: description,
+			RoleName: roleName
+		};
+		return this._retryOnTransientNetworkErrors('IAM::UpdateRoleDescription', this.iam.updateRoleDescription, [request])
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot update role description'));
+	}
+
+	_updateAssumeRolePolicy(roleName, policy) {
+		const request = {
+			PolicyDocument: JSON.stringify(policy),
+			RoleName: roleName,
+		};
+		return this._retryOnTransientNetworkErrors('IAM::UpdateAssumeRolePolicy', this.iam.updateAssumeRolePolicy, [request])
+			.catch(err => this._reportRoleError(roleName, err, 'Cannot update assume role policy'));
 	}
 
 	/**
@@ -182,8 +220,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 	update(role) {
 		const roleName = role.metadata.name;
 		const {attributes, policies} = this._translateAttributes(role);
-		const request = {RoleName: roleName};
-		return this._retryOnTransientNetworkErrors('IAM::GetRole', this.iam.getRole, [request])
+		return this._getRole(roleName)
 			.catch(err => {
 				// If not there: create it.
 				if (err.name === 'NoSuchEntity') {
@@ -205,7 +242,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 				// Note that the 'Description' of a policy is immutable, but in our case we're including the hash of the description in the name, so when it changes
 				// we just replace the respective policy.
 				// XXX: This replacing could lead to races where the role temporarily doesn't provide all needed permissions. The user must take that into account when designing their update flows.
-				return this._retryOnTransientNetworkErrors('IAM::ListRolePolicies', this.iam.listRolePolicies, [request])
+				return this._listRolePolicies(roleName)
 					.then(rolePoliciesResponse => {
 						const expectedPoliciesByName = policies.map(policy => ({
 							name: this._getRolePolicyName(roleName, policy),
@@ -222,14 +259,14 @@ class IAMRole { // eslint-disable-line padded-blocks
 						];
 						if (response.Role.Description !== attributes.Description) {
 							logger.debug(`[${roleName}]: Updating description`);
-							updatePromises.push(this._retryOnTransientNetworkErrors('IAM::UpdateRoleDescription', this.iam.updateRoleDescription, [Object.assign({}, request, {Description: attributes.Description})]));
+							updatePromises.push(this._updateRoleDescription(roleName, attributes.Description));
 						}
 
 						const existingAssumeRolePolicy = JSON.parse(decodeURIComponent(response.Role.AssumeRolePolicyDocument));
 						const expectedAssumeRolePolicy = JSON.parse(attributes.AssumeRolePolicyDocument);
 						if (!_.isEqual(existingAssumeRolePolicy, expectedAssumeRolePolicy)) {
 							logger.debug(`[${roleName}]: Updating assume role policy`);
-							updatePromises.push(this._retryOnTransientNetworkErrors('IAM::UpdateAssumeRolePolicy', this.iam.updateAssumeRolePolicy, [Object.assign({}, request, {PolicyDocument: attributes.AssumeRolePolicyDocument})]));
+							updatePromises.push(this._updateAssumeRolePolicy(roleName, expectedAssumeRolePolicy));
 						}
 
 						return Promise.all(updatePromises);
@@ -245,14 +282,9 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 */
 	delete(role) {
 		const roleName = role.metadata.name;
-		const request = {RoleName: roleName};
-		return this._retryOnTransientNetworkErrors('IAM::ListRolePolicies', this.iam.listRolePolicies, [request])
+		return this._listRolePolicies(roleName)
 			.then(response => Promise.all(response.PolicyNames.map(policyName => this._deleteRolePolicy(roleName, policyName))))
-			.then(() => this._retryOnTransientNetworkErrors('IAM::DeleteRole', this.iam.deleteRole, [request]))
-			.catch(err => {
-				logger.warn(`[${roleName}]: Cannot delete role: ${err.message}`);
-				throw new Error(`Cannot delete role: ${err.message}`);
-			});
+			.then(() => this._deleteRole(roleName));
 	}
 }
 
