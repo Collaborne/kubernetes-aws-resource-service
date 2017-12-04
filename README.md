@@ -1,6 +1,6 @@
 # kubernetes-aws-resource-service [![Build Status](https://travis-ci.org/Collaborne/kubernetes-aws-resource-service.svg?branch=master)](https://travis-ci.org/Collaborne/kubernetes-aws-resource-service)
 
-A service to automatically manage AWS resources based on kubernetes TPRs.
+An "operator" service to automatically manage AWS resources based on kubernetes TPRs.
 
 ## Supported Resources
 
