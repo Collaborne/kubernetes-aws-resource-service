@@ -85,15 +85,13 @@ const server = http.createServer(app);
 const listener = server.listen(argv.port, () => {
 	const k8sConfig = createK8sConfig(argv);
 	k8s(k8sConfig).then(function onConnected(k8sClient) {
-		const awsResourcesClient = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace);
-
 		const resourceDescriptions = [{
 			type: 'queues',
 			resourceClient: new SQSQueue(sqsClientOptions)
 		}];
 
-		function resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue) {
-			return k8sResourceClient.list()
+		function resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue) {
+			return resourceK8sClient.list()
 				.then(list => {
 					const resourceVersion = list.metadata.resourceVersion;
 
@@ -114,7 +112,7 @@ const listener = server.listen(argv.port, () => {
 				}).then(resourceVersion => {
 					// Start watching the resources from that version on
 					logger.info(`Watching ${type} at ${resourceVersion}...`);
-					k8sResourceClient.watch(resourceVersion)
+					resourceK8sClient.watch(resourceVersion)
 						.on('data', function(item) {
 							const resource = item.object;
 							const name = resource.metadata.name;
@@ -163,21 +161,22 @@ const listener = server.listen(argv.port, () => {
 						.on('end', function() {
 							// Restart the watch from the last known version.
 							logger.info('Watch ended, restarting');
-							return resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue);
+							return resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue);
 						});
 				});
 		}
 
 		const resourceLoopPromises = resourceDescriptions.map(resourceDescription => {
-			const k8sResourceClient = awsResourcesClient[resourceDescription.type];
-			if (!k8sResourceClient) {
+			const awsResourcesK8sClient = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace);
+			const resourceK8sClient = awsResourcesK8sClient[resourceDescription.type];
+			if (!resourceK8sClient) {
 				// XXX: Is this a failure?
-				logger.error(`Cannot create client for resources of type ${resourceDescription.type}: Available resources: ${Object.keys(awsResourcesClient)}.`);
+				logger.error(`Cannot create client for resources of type ${resourceDescription.type}: Available resources: ${Object.keys(awsResourcesK8sClient)}.`);
 				return Promise.reject(new Error(`Missing kubernetes client for ${resourceDescription.type}`));
 			}
 
 			const promisesQueue = new PromisesQueue();
-			return resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue).catch(err => {
+			return resourceLoop(resourceDescription.type, resourceK8sClient, resourceDescription.resourceClient, promisesQueue).catch(err => {
 				logger.error(`Error when monitoring resources of type ${resourceDescription.type}: ${err.message}`);
 				throw err;
 			});
