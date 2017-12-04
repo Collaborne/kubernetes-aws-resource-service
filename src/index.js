@@ -79,7 +79,7 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 	}];
 
 	function resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue) {
-		k8sResourceClient.list()
+		return k8sResourceClient.list()
 			.then(list => {
 				const resourceVersion = list.metadata.resourceVersion;
 
@@ -151,18 +151,25 @@ k8s(k8sConfig).then(function onConnected(k8sClient) {
 						logger.info('Watch ended, restarting');
 						return resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue);
 					});
-			})
+			});
 	}
 
-	resourceDescriptions.forEach(resourceDescription => {
+	const resourceLoopPromises = resourceDescriptions.map(resourceDescription => {
 		const k8sResourceClient = awsResourcesClient[resourceDescription.type];
-		if (k8sResourceClient) {
-			const promisesQueue = new PromisesQueue();
-			resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue);
-		} else {
-			console.error(`Resources of type ${resourceDescription.type} are not defined as Kubernetes ThirdPartyResource. Available ThirdPartyResources ${Object.keys(awsResourcesClient)}.`);
+		if (!k8sResourceClient) {
+			// XXX: Is this a failure?
+			logger.error(`Cannot create client for resources of type ${resourceDescription.type}: Available resources: ${Object.keys(awsResourcesClient)}.`);
+			return Promise.reject(new Error(`Missing kubernetes client for ${resourceDescription.type}`));
 		}
+
+		const promisesQueue = new PromisesQueue();
+		return resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue).catch(err => {
+			logger.error(`Error when monitoring resources of type ${resourceDescription.type}: ${err.message}`);
+			throw err;
+		});
 	});
+
+	return Promise.all(resourceLoopPromises);
 }).catch(function(err) {
 	logger.error(`Uncaught error, aborting: ${err.message}`);
 	process.exit(1);
