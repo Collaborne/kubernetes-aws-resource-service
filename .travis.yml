@@ -4,7 +4,7 @@ group: beta
 
 language: node_js
 node_js:
-- node
+- lts/carbon
 services:
 - docker
 cache:

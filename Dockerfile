@@ -1,4 +1,4 @@
-FROM node:boron-alpine
+FROM node:carbon-alpine
 
 # Configure the environment
 ENV NODE_ENV=production

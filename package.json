@@ -39,6 +39,6 @@
     "eslint-config-collaborne": "^1.1.1"
   },
   "engines": {
-    "node": ">=6.9.0"
+    "node": ">=8.9.0"
   }
 }
