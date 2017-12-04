@@ -8,6 +8,13 @@ const path = require('path');
 
 const k8s = require('auto-kubernetes-client');
 
+const http = require('http');
+const express = require('express');
+
+const monitoring = require('./monitoring');
+
+const pkg = require('../package.json');
+
 const logger = require('log4js').getLogger();
 
 const argv = yargs
@@ -18,6 +25,7 @@ const argv = yargs
 	.boolean('insecure-skip-tls-verify').describe('insecure-skip-tls-verify', 'If true, the server\'s certificate will not be checked for validity. This will make your HTTPS connections insecure')
 	.describe('token', 'Bearer token for authentication to the API server')
 	.describe('namespace', 'The namespace to watch').demandOption('namespace')
+	.number('port').default('port', process.env.PORT || 8080)
 	.help()
 	.argv;
 
@@ -69,108 +77,119 @@ const sqsClientOptions = {
 const SQSQueue = require('./resources/sqs');
 const PromisesQueue = require('./promises-queue');
 
-const k8sConfig = createK8sConfig(argv);
-k8s(k8sConfig).then(function onConnected(k8sClient) {
-	const awsResourcesClient = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace);
+// Set up the express server for /metrics
+const app = express();
+app.use(monitoring());
 
-	const resourceDescriptions = [{
-		type: 'queues',
-		resourceClient: new SQSQueue(sqsClientOptions)
-	}];
+const server = http.createServer(app);
+const listener = server.listen(argv.port, () => {
+	const k8sConfig = createK8sConfig(argv);
+	k8s(k8sConfig).then(function onConnected(k8sClient) {
+		const awsResourcesClient = k8sClient.group('aws.k8s.collaborne.com', 'v1').ns(argv.namespace);
 
-	function resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue) {
-		return k8sResourceClient.list()
-			.then(list => {
-				const resourceVersion = list.metadata.resourceVersion;
+		const resourceDescriptions = [{
+			type: 'queues',
+			resourceClient: new SQSQueue(sqsClientOptions)
+		}];
 
-				// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
-				for (const resource of list.items) {
-					const name = resource.metadata.name;
-					promisesQueue.enqueue(name, function() {
-						logger.info(`[${name}]: Syncing`);
-						return resourceClient.update(resource);
-					}).then(function(data) {
-						logger.info(`[${name}]: ${JSON.stringify(data)}`);
-					}, function(err) {
-						logger.error(`[${name}]: ${err.message} (${err.code})`);
-					});
-				}
+		function resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue) {
+			return k8sResourceClient.list()
+				.then(list => {
+					const resourceVersion = list.metadata.resourceVersion;
 
-				return resourceVersion;
-			}).then(resourceVersion => {
-				// Start watching the resources from that version on
-				logger.info(`Watching ${type} at ${resourceVersion}...`);
-				k8sResourceClient.watch(resourceVersion)
-					.on('data', function(item) {
-						const resource = item.object;
+					// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
+					for (const resource of list.items) {
 						const name = resource.metadata.name;
-
-						let next;
-
-						switch (item.type) {
-						case 'ADDED':
-							next = function() {
-								logger.info(`[${name}]: Creating resource`);
-								return resourceClient.create(resource);
-							};
-							break;
-						case 'MODIFIED':
-							next = function() {
-								logger.info(`[${name}]: Updating resource attributes`);
-								return resourceClient.update(resource);
-							};
-							break;
-						case 'DELETED':
-							next = function() {
-								logger.info(`[${name}]: Deleting resource`);
-								return resourceClient.delete(resource);
-							};
-							break;
-						case 'ERROR':
-							// Log the message, and continue: usually the stream would end now, but there might be more events
-							// in it that we do want to consume.
-							logger.warn(`Error while watching: ${item.object.message}, ignoring`);
-							return;
-						default:
-							logger.warn(`Unkown watch event type ${item.type}, ignoring`);
-							return;
-						}
-
-						// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
-						// will effectively stay rejected.
-						const result = promisesQueue.enqueue(name, next).then(function(data) {
+						promisesQueue.enqueue(name, function() {
+							logger.info(`[${name}]: Syncing`);
+							return resourceClient.update(resource);
+						}).then(function(data) {
 							logger.info(`[${name}]: ${JSON.stringify(data)}`);
 						}, function(err) {
 							logger.error(`[${name}]: ${err.message} (${err.code})`);
 						});
+					}
 
-						return result;
-					})
-					.on('end', function() {
-						// Restart the watch from the last known version.
-						logger.info('Watch ended, restarting');
-						return resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue);
-					});
-			});
-	}
+					return resourceVersion;
+				}).then(resourceVersion => {
+					// Start watching the resources from that version on
+					logger.info(`Watching ${type} at ${resourceVersion}...`);
+					k8sResourceClient.watch(resourceVersion)
+						.on('data', function(item) {
+							const resource = item.object;
+							const name = resource.metadata.name;
 
-	const resourceLoopPromises = resourceDescriptions.map(resourceDescription => {
-		const k8sResourceClient = awsResourcesClient[resourceDescription.type];
-		if (!k8sResourceClient) {
-			// XXX: Is this a failure?
-			logger.error(`Cannot create client for resources of type ${resourceDescription.type}: Available resources: ${Object.keys(awsResourcesClient)}.`);
-			return Promise.reject(new Error(`Missing kubernetes client for ${resourceDescription.type}`));
+							let next;
+
+							switch (item.type) {
+							case 'ADDED':
+								next = function() {
+									logger.info(`[${name}]: Creating resource`);
+									return resourceClient.create(resource);
+								};
+								break;
+							case 'MODIFIED':
+								next = function() {
+									logger.info(`[${name}]: Updating resource attributes`);
+									return resourceClient.update(resource);
+								};
+								break;
+							case 'DELETED':
+								next = function() {
+									logger.info(`[${name}]: Deleting resource`);
+									return resourceClient.delete(resource);
+								};
+								break;
+							case 'ERROR':
+								// Log the message, and continue: usually the stream would end now, but there might be more events
+								// in it that we do want to consume.
+								logger.warn(`Error while watching: ${item.object.message}, ignoring`);
+								return;
+							default:
+								logger.warn(`Unkown watch event type ${item.type}, ignoring`);
+								return;
+							}
+
+							// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
+							// will effectively stay rejected.
+							const result = promisesQueue.enqueue(name, next).then(function(data) {
+								logger.info(`[${name}]: ${JSON.stringify(data)}`);
+							}, function(err) {
+								logger.error(`[${name}]: ${err.message} (${err.code})`);
+							});
+
+							return result;
+						})
+						.on('end', function() {
+							// Restart the watch from the last known version.
+							logger.info('Watch ended, restarting');
+							return resourceLoop(type, k8sResourceClient, resourceClient, promisesQueue);
+						});
+				});
 		}
 
-		const promisesQueue = new PromisesQueue();
-		return resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue).catch(err => {
-			logger.error(`Error when monitoring resources of type ${resourceDescription.type}: ${err.message}`);
-			throw err;
-		});
-	});
+		const resourceLoopPromises = resourceDescriptions.map(resourceDescription => {
+			const k8sResourceClient = awsResourcesClient[resourceDescription.type];
+			if (!k8sResourceClient) {
+				// XXX: Is this a failure?
+				logger.error(`Cannot create client for resources of type ${resourceDescription.type}: Available resources: ${Object.keys(awsResourcesClient)}.`);
+				return Promise.reject(new Error(`Missing kubernetes client for ${resourceDescription.type}`));
+			}
 
-	return Promise.all(resourceLoopPromises);
-}).catch(function(err) {
-	logger.error(`Uncaught error, aborting: ${err.message}`);
-	process.exit(1);
+			const promisesQueue = new PromisesQueue();
+			return resourceLoop(resourceDescription.type, k8sResourceClient, resourceDescription.resourceClient, promisesQueue).catch(err => {
+				logger.error(`Error when monitoring resources of type ${resourceDescription.type}: ${err.message}`);
+				throw err;
+			});
+		});
+
+		// XXX: The promises now all start, but technically they might fail quickly if something goes wrong.
+		//      For the purposes of logging things though we're "ready" now.
+		logger.info(`${pkg.name} ${pkg.version} ready on port ${listener.address().port}`);
+
+		return Promise.all(resourceLoopPromises);
+	}).catch(function(err) {
+		logger.error(`Uncaught error, aborting: ${err.message}`);
+		process.exit(1);
+	});
 });
