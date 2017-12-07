@@ -110,7 +110,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 
 	_reportError(logName, err, description) {
 		logger.warn(`[${logName}]: ${description}: ${err.message}`);
-		throw new Error(`${description}: ${err.message}`);
+		throw err;
 	}
 
 	_createQueue(queueName, attributes) {
