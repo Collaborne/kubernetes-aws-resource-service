@@ -87,6 +87,23 @@ const PromisesQueue = require('./promises-queue');
 const app = express();
 app.use(monitoring());
 
+/**
+ * Log whether the given promise resolved successfully or not.
+ *
+ * @param {string} name the name of the entity that the promise actually modifies
+ * @param {Promise<any>} promise a promise
+ * @return {Promise<any>} the same promise with added logging
+ */
+function logOperationResult(name, promise) {
+	return promise.then(data => {
+		logger.info(`[${name}]: Success ${JSON.stringify(data)}`);
+		return data;
+	}, err => {
+		logger.error(`[${name}]: Error ${err.message} (${err.code})`);
+		throw err;
+	});
+}
+
 const server = http.createServer(app);
 const listener = server.listen(argv.port, () => {
 	const k8sConfig = createK8sConfig(argv);
@@ -110,14 +127,10 @@ const listener = server.listen(argv.port, () => {
 					// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
 					for (const resource of list.items) {
 						const name = resource.metadata.name;
-						promisesQueue.enqueue(name, function() {
+						logOperationResult(name, promisesQueue.enqueue(name, function() {
 							logger.info(`[${name}]: Syncing`);
 							return resourceClient.update(resource);
-						}).then(function(data) {
-							logger.info(`[${name}]: ${JSON.stringify(data)}`);
-						}, function(err) {
-							logger.error(`[${name}]: ${err.message} (${err.code})`);
-						});
+						}));
 					}
 
 					return resourceVersion;
@@ -162,13 +175,7 @@ const listener = server.listen(argv.port, () => {
 
 							// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
 							// will effectively stay rejected.
-							const result = promisesQueue.enqueue(name, next).then(function(data) {
-								logger.info(`[${name}]: ${JSON.stringify(data)}`);
-							}, function(err) {
-								logger.error(`[${name}]: ${err.message} (${err.code})`);
-							});
-
-							return result;
+							return logOperationResult(name, promisesQueue.enqueue(name, next));
 						})
 						.on('end', function() {
 							// Restart the watch from the last known version.
