@@ -196,7 +196,7 @@ const listener = server.listen(argv.port, () => {
 						})
 						.on('end', () => {
 							// Restart the watch from the last known version.
-							logger.info('Watch ended, restarting');
+							logger.info(`Watch of ${type} ended, restarting`);
 							resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue);
 						});
 				});
