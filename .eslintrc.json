@@ -19,20 +19,6 @@
 			"parserOptions": {
 				"sourceType": "script"
 			}
-		},
-		{
-			"files": [
-				"src/resources/sqs.js"
-			],
-			"rules": {
-				"no-shadow": "warn",
-				"sort-keys": "warn",
-				"max-params": "warn",
-				"max-statements": "warn",
-				"func-names": "warn",
-				"lines-around-comment": "warn",
-				"valid-jsdoc": "warn"
-			}
 		}
 	]
 }
