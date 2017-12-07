@@ -190,7 +190,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 					// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
 					// or has been deleted in the meantime. Create it again.
 					logger.info(`[${queueName}]: Queue does not/no longer exist, re-creating it`);
-					return this._createQueue(queue);
+					return this.create(queue);
 				}
 
 				throw err;
