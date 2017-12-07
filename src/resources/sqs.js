@@ -70,7 +70,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	 * @param {String} [queueArn] the ARN of the queue
 	 * @return {Object} the queue attributes
 	 */
-	translateQueueAttributes(queue, queueArn) {
+	_translateAttributes(queue, queueArn) {
 		return Object.keys(queue.spec || {}).reduce((result, key) => {
 			const value = queue.spec[key];
 			let resultValue;
@@ -93,159 +93,141 @@ class SQSQueue { // eslint-disable-line padded-blocks
 		}, {});
 	}
 
-	/**
-	 * Resolve a promise using the given `resolve` after the `timeout` has passed by retrying `operation` on `queue`.
-	 *
-	 * @param {Function} resolve
-	 * @param {Function} operation
-	 * @param {Number} after
-	 * @param {Queue} queue
-	 */
-	resolveRetry(resolve, operation, after, queue, cause) {
-		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after / 1000}s`);
-		return delay(after).then(() => resolve(operation(queue)));
+	// XXX: logName could be awsOperation.name, except that that is empty for AWS?
+	_retryOnTransientNetworkErrors(logName, awsOperation, awsArguments) {
+		const errorRetryDelay = 30000;
+		return awsOperation.apply(this.sqs, awsArguments).promise()
+			.catch(err => {
+				if (isTransientNetworkError(err)) {
+					logger.warn(`[${logName}]: transient ${err.code} ${err.errno}, retrying in ${errorRetryDelay / 1000}s`);
+					return delay(errorRetryDelay).then(() => this._retryOnTransientNetworkErrors(logName, awsOperation, awsArguments));
+				}
+
+				logger.warn(`[${logName}]: non-retryable error in operation: ${err.message}`);
+				throw err;
+			});
+	}
+
+	_reportError(logName, err, description) {
+		logger.warn(`[${logName}]: ${description}: ${err.message}`);
+		throw new Error(`${description}: ${err.message}`);
+	}
+
+	_createQueue(queueName, attributes) {
+		const request = {
+			Attributes: attributes,
+			QueueName: queueName
+		};
+		return this._retryOnTransientNetworkErrors('SQS::CreateQueue', this.sqs.createQueue, [request])
+			.catch(err => this._reportError(queueName, err, 'Cannot create queue'));
+	}
+
+	_deleteQueue(queueName, queueUrl) {
+		const request = {
+			QueueUrl: queueUrl
+		};
+		return this._retryOnTransientNetworkErrors('SQS::DeleteQueue', this.sqs.deleteQueue, [request])
+			.catch(err => this._reportError(queueName, err, 'Cannot delete queue'));
+	}
+
+	_getQueueUrl(queueName) {
+		const request = {
+			QueueName: queueName
+		};
+		return this._retryOnTransientNetworkErrors('SQS::GetQueueUrl', this.sqs.getQueueUrl, [request])
+			.catch(err => this._reportError(queueName, err, 'Cannot get queue url'));
+	}
+
+	_getQueueAttributes(queueName, queueUrl, attributeNames) {
+		const request = {
+			AttributeNames: attributeNames,
+			QueueUrl: queueUrl
+		};
+		return this._retryOnTransientNetworkErrors('SQS::GetQueueAttributes', this.sqs.getQueueAttributes, [request])
+			.catch(err => this._reportError(queueName, err, 'Cannot get queue attributes'));
+	}
+
+	_setQueueAttributes(queueName, queueUrl, attributes) {
+		const request = {
+			Attributes: attributes,
+			QueueUrl: queueUrl
+		};
+		return this._retryOnTransientNetworkErrors('SQS::SetQueueAttributes', this.sqs.setQueueAttributes, [request])
+			.catch(err => this._reportError(queueName, err, 'Cannot set queue attributes'));
 	}
 
 	/**
+	 * Create a new queue
 	 *
 	 * @param {Queue} queue Queue definition in Kubernetes
+	 * @return {Promise<any>} promise that resolves when the queue is created
 	 */
 	create(queue) {
-		const self = this;
-		return new Promise(function(resolve, reject) {
-			const attributes = self.translateQueueAttributes(queue);
-			const request = {
-				Attributes: attributes,
-				QueueName: queue.metadata.name,
-			};
-			return self.sqs.createQueue(request, function(err, data) {
-				if (err) {
-					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
-						return self.resolveRetry(resolve, self.create.bind(self), 10000, queue, 'queue recently deleted');
-					} else if (isTransientNetworkError(err)) {
-						return self.resolveRetry(resolve, self.create.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot create queue: ${err.message}`);
-					return reject(err);
+		const attributes = this._translateAttributes(queue);
+		return this._createQueue(queue.metadata.name, attributes)
+			.catch(err => {
+				if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
+					const retryDelay = 30000;
+					logger.info(`[${queue.metadata.name}]: Queue recently deleted, retrying creation in ${retryDelay / 1000}s`);
+					return delay(retryDelay).then(() => this.create(queue));
 				}
 
-				return resolve(data);
+				throw err;
 			});
-		});
 	}
 
 	/**
 	 * Updates SQS queue
+	 *
 	 * @param {Queue} queue Queue definition in Kubernetes
+	 * @return {Promise<any>} promise that resolves when the queue is updated
 	 */
 	update(queue) {
-		const self = this;
-		return new Promise(function(resolve, reject) {
-			const request = {
-				QueueName: queue.metadata.name
-			};
-			return self.sqs.getQueueUrl(request, function(err, data) {
-				if (err) {
-					if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
-						// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
-						// or has been deleted in the meantime. Create it again.
-						logger.info(`[${queue.metadata.name}]: Queue does not/no longer exist, re-creating it`);
-						return resolve(self.create(queue));
-					} else if (isTransientNetworkError(err)) {
-						return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
-					return reject(err);
+		const queueName = queue.metadata.name;
+		return this._getQueueUrl(queueName)
+			.catch(err => {
+				if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
+					// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
+					// or has been deleted in the meantime. Create it again.
+					logger.info(`[${queueName}]: Queue does not/no longer exist, re-creating it`);
+					return this._createQueue(queue);
 				}
 
-				const queueUrl = data.QueueUrl;
-				const attributeRequest = {
-					AttributeNames: ['QueueArn'],
-					QueueUrl: queueUrl,
-				};
-				return self.sqs.getQueueAttributes(attributeRequest, function(err, data) {
-					if (err) {
-						if (isTransientNetworkError(err)) {
-							return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
+				throw err;
+			})
+			.then(response => {
+				const queueUrl = response.QueueUrl;
+				return this._getQueueAttributes(queueName, queueUrl, ['QueueArn'])
+					.then(attributesResponse => {
+						const attributes = this._translateAttributes(queue, attributesResponse.Attributes.QueueArn);
+						if (Object.keys(attributes).length === 0) {
+							// The API requires that we provide attributes when trying to update attributes.
+							// If the caller intended to set values to their defaults, then they must be explicit and
+							// provide these values. In other words: AWS SQS copies the defaults at creation time, and
+							// afterwards there is no such thing as a "default" anymore.
+							// From our side though this is not an error, but we merely ignore the request.
+							// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
+							logger.warn(`[${queueName}]: Ignoring update without attributes`);
+							return Promise.resolve({});
 						}
 
-						logger.warn(`[${queue.metadata.name}]: Cannot determine queue ARN: ${err.message}`);
-						return reject(err);
-					}
-
-					const attributes = self.translateQueueAttributes(queue, data.Attributes.QueueArn);
-					if (Object.keys(attributes).length === 0) {
-						// The API requires that we provide attributes when trying to update attributes.
-						// If the caller intended to set values to their defaults, then they must be explicit and
-						// provide these values. In other words: AWS SQS copies the defaults at creation time, and
-						// afterwards there is no such thing as a "default" anymore.
-						// From our side though this is not an error, but we merely ignore the request.
-						// See also a similar change in Apache Camel: https://issues.apache.org/jira/browse/CAMEL-5782
-						logger.warn(`[${queue.metadata.name}]: Ignoring update without attributes`);
-						return resolve();
-					}
-
-					const attributeUpdateRequest = {
-						Attributes: attributes,
-						QueueUrl: queueUrl,
-					};
-					return self.sqs.setQueueAttributes(attributeUpdateRequest, function(err, data) {
-						if (err) {
-							if (isTransientNetworkError(err)) {
-								return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
-							}
-
-							logger.warn(`[${queue.metadata.name}]: Cannot update queue attributes: ${err.message}`);
-							return reject(err);
-						}
-
-						return resolve(data);
+						return this._setQueueAttributes(queueName, queueUrl, attributes);
 					});
-				});
 			});
-		});
 	}
 
 	/**
 	 * Delete SQS queue
 	 *
 	 * @param {Queue} queue Queue definition in Kubernetes
+	 * @return {Promise<any>} a promise that resolves when the queue was deleted
 	 */
 	delete(queue) {
-		const self = this;
-		return new Promise(function(resolve, reject) {
-			const request = {
-				QueueName: queue.metadata.name
-			};
-			return self.sqs.getQueueUrl(request, function(err, data) {
-				if (err) {
-					if (isTransientNetworkError(err)) {
-						return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
-					}
-
-					logger.warn(`[${queue.metadata.name}]: Cannot determine queue URL: ${err.message}`);
-					return reject(err);
-				}
-
-				const deleteRequest = {
-					QueueUrl: data.QueueUrl
-				};
-				return self.sqs.deleteQueue(deleteRequest, function(err, data) {
-					if (err) {
-						if (isTransientNetworkError(err)) {
-							return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
-						}
-
-						logger.warn(`[${queue.metadata.name}]: Cannot delete queue: ${err.message}`);
-						return reject(err);
-					}
-
-					return resolve(data);
-				});
+		const queueName = queue.metadata.name;
+		return this._getQueueUrl(queueName)
+			.then(response => {
+				return this._deleteQueue(queueName, response.QueueUrl);
 			});
-		});
 	}
 }
 
