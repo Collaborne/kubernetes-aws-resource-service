@@ -25,7 +25,7 @@ const argv = yargs
 	.boolean('insecure-skip-tls-verify').describe('insecure-skip-tls-verify', 'If true, the server\'s certificate will not be checked for validity. This will make your HTTPS connections insecure')
 	.describe('token', 'Bearer token for authentication to the API server')
 	.describe('namespace', 'The namespace to watch').demandOption('namespace')
-	.array('resource-types').describe('resource-types', 'Whitelist of enabled resource types (empty to enable all)').default('resource-types', [])
+	.array('resource-type').describe('resource-type', 'Enabled resource types (empty to enable all, can use multiple times)').default('resource-type', [])
 	.number('port').default('port', process.env.PORT || 8080)
 	.help()
 	.argv;
@@ -131,7 +131,7 @@ const listener = server.listen(argv.port, () => {
 				resourceClient: new IAMRole(iamClientOptions),
 				type: 'roles',
 			}
-		].filter(resourceDescription => argv.resourceTypes.length === 0 || argv.resourceTypes.indexOf(resourceDescription.type) !== -1);
+		].filter(resourceDescription => argv.resourceType.length === 0 || argv.resourceType.indexOf(resourceDescription.type) !== -1);
 		logger.debug(`Enabled resource types: ${resourceDescriptions.map(resourceDescription => resourceDescription.type)}`);
 
 		function resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue) { // eslint-disable-line max-params
