@@ -29,20 +29,9 @@
 				"sort-keys": "warn",
 				"max-params": "warn",
 				"max-statements": "warn",
-				"object-curly-spacing": "warn",
-				"object-property-newline": "warn",
-				"semi": "warn",
-				"array-bracket-newline": "warn",
-				"array-bracket-spacing": "warn",
 				"func-names": "warn",
-				"consistent-return": "warn",
 				"lines-around-comment": "warn",
-				"no-return-assign": "warn",
-				"no-extra-semi": "warn",
-				"valid-jsdoc": "warn",
-				"no-case-declarations": "warn",
-				"space-infix-ops": "warn",
-				"no-invalid-this": "warn"
+				"valid-jsdoc": "warn"
 			}
 		}
 	]

@@ -56,8 +56,11 @@ class SQSQueue { // eslint-disable-line padded-blocks
 			return policy;
 		}
 
-		logger.debug(`[${queueName}]: Injecting resource ARN ${queueArn} into policy document`)
-		return Object.assign({}, policy, { Statement: (policy.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement)) });
+		logger.debug(`[${queueName}]: Injecting resource ARN ${queueArn} into policy document`);
+		const newStatement = (policy.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement));
+		return Object.assign({}, policy, {
+			Statement: newStatement
+		});
 	}
 
 	/**
@@ -99,7 +102,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	 * @param {Queue} queue
 	 */
 	resolveRetry(resolve, operation, after, queue, cause) {
-		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after/1000}s`);
+		logger.warn(`[${queue.metadata.name}]: ${cause}, retrying in ${after / 1000}s`);
 		return delay(after).then(() => resolve(operation(queue)));
 	}
 
@@ -111,7 +114,11 @@ class SQSQueue { // eslint-disable-line padded-blocks
 		const self = this;
 		return new Promise(function(resolve, reject) {
 			const attributes = self.translateQueueAttributes(queue);
-			return self.sqs.createQueue({ QueueName: queue.metadata.name, Attributes: attributes }, function(err, data) {
+			const request = {
+				Attributes: attributes,
+				QueueName: queue.metadata.name,
+			};
+			return self.sqs.createQueue(request, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.QueueDeletedRecently') {
 						return self.resolveRetry(resolve, self.create.bind(self), 10000, queue, 'queue recently deleted');
@@ -135,7 +142,10 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	update(queue) {
 		const self = this;
 		return new Promise(function(resolve, reject) {
-			return self.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
+			const request = {
+				QueueName: queue.metadata.name
+			};
+			return self.sqs.getQueueUrl(request, function(err, data) {
 				if (err) {
 					if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
 						// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
@@ -151,7 +161,11 @@ class SQSQueue { // eslint-disable-line padded-blocks
 				}
 
 				const queueUrl = data.QueueUrl;
-				return self.sqs.getQueueAttributes({ QueueUrl: queueUrl, AttributeNames: [ 'QueueArn' ] }, function(err, data) {
+				const attributeRequest = {
+					AttributeNames: ['QueueArn'],
+					QueueUrl: queueUrl,
+				};
+				return self.sqs.getQueueAttributes(attributeRequest, function(err, data) {
 					if (err) {
 						if (isTransientNetworkError(err)) {
 							return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
@@ -173,8 +187,11 @@ class SQSQueue { // eslint-disable-line padded-blocks
 						return resolve();
 					}
 
-
-					return self.sqs.setQueueAttributes({ QueueUrl: queueUrl, Attributes: attributes }, function(err, data) {
+					const attributeUpdateRequest = {
+						Attributes: attributes,
+						QueueUrl: queueUrl,
+					};
+					return self.sqs.setQueueAttributes(attributeUpdateRequest, function(err, data) {
 						if (err) {
 							if (isTransientNetworkError(err)) {
 								return self.resolveRetry(resolve, self.update.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
@@ -199,7 +216,10 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	delete(queue) {
 		const self = this;
 		return new Promise(function(resolve, reject) {
-			return self.sqs.getQueueUrl({ QueueName: queue.metadata.name }, function(err, data) {
+			const request = {
+				QueueName: queue.metadata.name
+			};
+			return self.sqs.getQueueUrl(request, function(err, data) {
 				if (err) {
 					if (isTransientNetworkError(err)) {
 						return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
@@ -209,7 +229,10 @@ class SQSQueue { // eslint-disable-line padded-blocks
 					return reject(err);
 				}
 
-				return self.sqs.deleteQueue({ QueueUrl: data.QueueUrl }, function(err, data) {
+				const deleteRequest = {
+					QueueUrl: data.QueueUrl
+				};
+				return self.sqs.deleteQueue(deleteRequest, function(err, data) {
 					if (err) {
 						if (isTransientNetworkError(err)) {
 							return self.resolveRetry(resolve, self.delete.bind(self), 30000, queue, `transient ${err.code} ${err.errno}`);
