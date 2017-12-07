@@ -52,7 +52,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 * @param {Object} [options] IAM client options
 	 */
 	constructor(options = {}) {
-		this.iam = new AWS.IAM(Object.assign({}, options));
+		this.iam = new AWS.IAM(options);
 	}
 
 	/**

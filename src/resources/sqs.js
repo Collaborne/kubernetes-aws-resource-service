@@ -40,7 +40,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	 * @param {Object} [options] SQS client options
 	 */
 	constructor(options = {}) {
-		this.sqs = new AWS.SQS(Object.assign({}, options));
+		this.sqs = new AWS.SQS(options);
 	}
 
 	/**
