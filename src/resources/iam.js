@@ -161,6 +161,8 @@ class IAMRole { // eslint-disable-line padded-blocks
 			PolicyName: policyName,
 			RoleName: roleName,
 		};
+		// Log each added policy and the content
+		logger.info(`[${roleName}]: Adding policy ${policyName} '${JSON.stringify(policy)}'`);
 		return this._retryOnTransientNetworkErrors('IAM::PutRolePolicy', this.iam.putRolePolicy, [request])
 			.catch(err => this._reportRoleError(roleName, err, 'Cannot put role policy'));
 	}
@@ -170,6 +172,9 @@ class IAMRole { // eslint-disable-line padded-blocks
 			PolicyName: policyName,
 			RoleName: roleName,
 		};
+		// Log each removed policy
+		// XXX: Should we actually query the content before doing that?
+		logger.info(`[${roleName}]: Removing policy ${policyName}`);
 		return this._retryOnTransientNetworkErrors('IAM::DeleteRolePolicy', this.iam.deleteRolePolicy, [request])
 			.catch(err => this._reportRoleError(roleName, err, 'Cannot delete role policy'));
 	}
