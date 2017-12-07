@@ -33,36 +33,51 @@ const argv = yargs
 /**
  * Creates basic configuration for accessing the Kubernetes API server
  *
- * @param {Object} argv Command line arguments
+ * @param {Object} args Command line arguments
  * @returns {Object} Kubernetes client configuration
  */
-function createK8sConfig(argv) {
-	let k8sConfig;
-	if (argv.server) {
-		// For local development
-		k8sConfig = {
-			url: argv.server,
-			insecureSkipTlsVerify: argv.insecureSkipTlsVerify
+function createK8sConfig(args) {
+	function createK8sConfigWithServer({server, insecureSkipTlsVerify, certificateAuthority, token, username, password, clientCertificate, clientKey}) {
+		const k8sConfig = {
+			insecureSkipTlsVerify: insecureSkipTlsVerify,
+			url: server,
 		};
-		if (argv.certificateAuthority) {
-			k8sConfig.ca = fs.readFileSync(argv.certificateAuthority, 'utf8');
+		if (certificateAuthority) {
+			k8sConfig.ca = fs.readFileSync(certificateAuthority, 'utf8');
 		}
-		if (argv.token) {
-			k8sConfig.auth = { bearer: argv.token };
-		} else if (argv.username && argv.password) {
-			k8sConfig.auth = { user: argv.username, pass: argv.password };
-		} else if (argv.clientCertificate && argv.clientKey) {
-			k8sConfig.cert = fs.readFileSync(argv.clientCertificate, 'utf8');
-			k8sConfig.key = fs.readFileSync(argv.clientKey, 'utf8');
+		if (token) {
+			k8sConfig.auth = {
+				bearer: token
+			};
+		} else if (username && password) {
+			k8sConfig.auth = {
+				pass: password,
+				user: username,
+			};
+		} else if (clientCertificate && clientKey) {
+			k8sConfig.cert = fs.readFileSync(clientCertificate, 'utf8');
+			k8sConfig.key = fs.readFileSync(clientKey, 'utf8');
 		}
-	} else if (process.env.KUBERNETES_SERVICE_HOST) {
+	}
+
+	function createK8sConfigFromEnvironment(env) {
 		// Runs in Kubernetes
 		const credentialsPath = '/var/run/secrets/kubernetes.io/serviceaccount/';
-		k8sConfig = {
-			url: `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`,
+		return {
+			auth: {
+				bearer: fs.readFileSync(path.resolve(credentialsPath, 'token'), 'utf8')
+			},
 			ca: fs.readFileSync(path.resolve(credentialsPath, 'ca.crt'), 'utf8'),
-			auth: { bearer: fs.readFileSync(path.resolve(credentialsPath, 'token'), 'utf8') }
-		}
+			url: `https://${env.KUBERNETES_SERVICE_HOST}:${env.KUBERNETES_SERVICE_PORT}`,
+		};
+	}
+
+	let k8sConfig;
+	if (args.server) {
+		// For local development
+		k8sConfig = createK8sConfigWithServer(args);
+	} else if (process.env.KUBERNETES_SERVICE_HOST) {
+		k8sConfig = createK8sConfigFromEnvironment(process.env);
 	} else {
 		throw new Error('Unknown Kubernetes API server');
 	}
@@ -107,7 +122,7 @@ function logOperationResult(name, promise) {
 const server = http.createServer(app);
 const listener = server.listen(argv.port, () => {
 	const k8sConfig = createK8sConfig(argv);
-	k8s(k8sConfig).then(function onConnected(k8sClient) {
+	k8s(k8sConfig).then(k8sClient => {
 		const resourceDescriptions = [
 			{
 				resourceClient: new SQSQueue(sqsClientOptions),
@@ -119,7 +134,7 @@ const listener = server.listen(argv.port, () => {
 		].filter(resourceDescription => argv.resourceTypes.length === 0 || argv.resourceTypes.indexOf(resourceDescription.type) !== -1);
 		logger.debug(`Enabled resource types: ${resourceDescriptions.map(resourceDescription => resourceDescription.type)}`);
 
-		function resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue) {
+		function resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue) { // eslint-disable-line max-params
 			return resourceK8sClient.list()
 				.then(list => {
 					const resourceVersion = list.metadata.resourceVersion;
@@ -127,7 +142,7 @@ const listener = server.listen(argv.port, () => {
 					// Treat all resources we see as "update", which will trigger a creation/update of attributes accordingly.
 					for (const resource of list.items) {
 						const name = resource.metadata.name;
-						logOperationResult(name, promisesQueue.enqueue(name, function() {
+						logOperationResult(name, promisesQueue.enqueue(name, () => {
 							logger.info(`[${name}]: Syncing`);
 							return resourceClient.update(resource);
 						}));
@@ -138,7 +153,7 @@ const listener = server.listen(argv.port, () => {
 					// Start watching the resources from that version on
 					logger.info(`Watching ${type} at ${resourceVersion}...`);
 					resourceK8sClient.watch(resourceVersion)
-						.on('data', function(item) {
+						.on('data', item => {
 							const resource = item.object;
 							const name = resource.metadata.name;
 
@@ -146,19 +161,19 @@ const listener = server.listen(argv.port, () => {
 
 							switch (item.type) {
 							case 'ADDED':
-								next = function() {
+								next = function createResource() {
 									logger.info(`[${name}]: Creating resource`);
 									return resourceClient.create(resource);
 								};
 								break;
 							case 'MODIFIED':
-								next = function() {
+								next = function updateResource() {
 									logger.info(`[${name}]: Updating resource attributes`);
 									return resourceClient.update(resource);
 								};
 								break;
 							case 'DELETED':
-								next = function() {
+								next = function deleteResource() {
 									logger.info(`[${name}]: Deleting resource`);
 									return resourceClient.delete(resource);
 								};
@@ -175,12 +190,12 @@ const listener = server.listen(argv.port, () => {
 
 							// Note that we retain the 'rejected' state here: an existing resource that ended in a rejection
 							// will effectively stay rejected.
-							return logOperationResult(name, promisesQueue.enqueue(name, next));
+							logOperationResult(name, promisesQueue.enqueue(name, next));
 						})
-						.on('end', function() {
+						.on('end', () => {
 							// Restart the watch from the last known version.
 							logger.info('Watch ended, restarting');
-							return resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue);
+							resourceLoop(type, resourceK8sClient, resourceClient, promisesQueue);
 						});
 				});
 		}
@@ -206,7 +221,7 @@ const listener = server.listen(argv.port, () => {
 		logger.info(`${pkg.name} ${pkg.version} ready on port ${listener.address().port}`);
 
 		return Promise.all(resourceLoopPromises);
-	}).catch(function(err) {
+	}).catch(err => {
 		logger.error(`Uncaught error, aborting: ${err.message}`);
 		process.exit(1);
 	});

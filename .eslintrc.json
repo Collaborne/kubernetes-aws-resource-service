@@ -22,7 +22,6 @@
 		},
 		{
 			"files": [
-				"src/index.js",
 				"src/resources/sqs.js"
 			],
 			"rules": {
