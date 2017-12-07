@@ -58,6 +58,8 @@ function createK8sConfig(args) {
 			k8sConfig.cert = fs.readFileSync(clientCertificate, 'utf8');
 			k8sConfig.key = fs.readFileSync(clientKey, 'utf8');
 		}
+
+		return k8sConfig;
 	}
 
 	function createK8sConfigFromEnvironment(env) {
