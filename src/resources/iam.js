@@ -30,6 +30,7 @@ const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError, md5} = 
  * @property {string} description
  * @property {string} path
  * @property {Policy[]} policies
+ * @property {string[]} policyArns ARNs of attached policies
  */
 
 /**
@@ -59,6 +60,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 * @typedef TranslateAttributesResult
 	 * @property {Object} attributes
 	 * @property {Policy[]} policies
+	 * @property {string[]} policyArns
 	 */
 
 	/**
@@ -69,6 +71,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 */
 	_translateAttributes(resource) {
 		const policies = [];
+		const policyArns = [];
 		const attributes = Object.keys(resource.spec || {}).reduce((result, key) => {
 			const value = resource.spec[key];
 
@@ -77,6 +80,10 @@ class IAMRole { // eslint-disable-line padded-blocks
 			case 'policies':
 				value.map(capitalizeFieldNames).forEach(policy => policies.push(policy));
 				// Don't process this further: 'policies' does not actually belong into an IAM::Role.
+				return result;
+			case 'policyArns':
+				value.forEach(policyArn => policyArns.push(policyArn));
+				// Don't process this further: 'policyArns' does not actually belong into an IAM::Role.
 				return result;
 			case 'assumeRolePolicyDocument':
 				// Apply the default version if it is missing. This simplifies later comparisions of these values.
@@ -97,6 +104,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 		return {
 			attributes,
 			policies,
+			policyArns,
 		};
 	}
 
@@ -179,6 +187,36 @@ class IAMRole { // eslint-disable-line padded-blocks
 			.catch(err => this._reportError(roleName, err, 'Cannot delete role policy'));
 	}
 
+	_listAttachedRolePolicies(roleName) {
+		const request = {
+			RoleName: roleName
+		};
+		return this._retryOnTransientNetworkErrors('IAM::ListAttachedRolePolicies', this.iam.listAttachedRolePolicies, [request])
+			.catch(err => this._reportError(roleName, err, 'Cannot list attached role policies'));
+	}
+
+	_attachRolePolicy(roleName, policyArn) {
+		const request = {
+			PolicyArn: policyArn,
+			RoleName: roleName,
+		};
+		// Log each added policy and the content
+		logger.info(`[${roleName}]: Attaching policy ${policyArn}`);
+		return this._retryOnTransientNetworkErrors('IAM::AttachRolePolicy', this.iam.attachRolePolicy, [request])
+			.catch(err => this._reportError(roleName, err, 'Cannot attach role policy'));
+	}
+
+	_detachRolePolicy(roleName, policyArn) {
+		const request = {
+			PolicyArn: policyArn,
+			RoleName: roleName,
+		};
+		// Log each added policy and the content
+		logger.info(`[${roleName}]: Detaching policy ${policyArn}`);
+		return this._retryOnTransientNetworkErrors('IAM::DetachRolePolicy', this.iam.detachRolePolicy, [request])
+			.catch(err => this._reportError(roleName, err, 'Cannot detach role policy'));
+	}
+
 	_updateRoleDescription(roleName, description) {
 		const request = {
 			Description: description,
@@ -204,15 +242,18 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 * @returns {Promise<any>} a promise that resolves when the role was created
 	 */
 	create(role) {
-		const {attributes, policies} = this._translateAttributes(role);
+		const {attributes, policies, policyArns} = this._translateAttributes(role);
 		return this._createRole(role.metadata.name, attributes)
 			.then(response => {
 				const roleName = response.Role.RoleName;
 				const putRolePolicyPromises = policies.map(policy => {
 					return this._putRolePolicy(roleName, policy);
 				});
+				const attachRolePolicyPromises = policyArns.map(policyArn => {
+					return this._attachRolePolicy(roleName, policyArn);
+				});
 
-				return Promise.all(putRolePolicyPromises);
+				return Promise.all([putRolePolicyPromises, attachRolePolicyPromises]);
 			});
 	}
 
@@ -224,7 +265,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 */
 	update(role) {
 		const roleName = role.metadata.name;
-		const {attributes, policies} = this._translateAttributes(role);
+		const {attributes, policies, policyArns} = this._translateAttributes(role);
 		return this._getRole(roleName)
 			.catch(err => {
 				// If not there: create it.
@@ -247,7 +288,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 				// Note that the 'Description' of a policy is immutable, but in our case we're including the hash of the description in the name, so when it changes
 				// we just replace the respective policy.
 				// XXX: This replacing could lead to races where the role temporarily doesn't provide all needed permissions. The user must take that into account when designing their update flows.
-				return this._listRolePolicies(roleName)
+				const updateRolePoliciesPromise = this._listRolePolicies(roleName)
 					.then(rolePoliciesResponse => {
 						const expectedPoliciesByName = policies.map(policy => ({
 							name: this._getRolePolicyName(roleName, policy),
@@ -261,10 +302,32 @@ class IAMRole { // eslint-disable-line padded-blocks
 						const addPolicyNames = _.difference(expectedPolicyNames, existingRolePolicyNames);
 						const addPoliciesPromises = addPolicyNames.map(policyName => expectedPoliciesByName[policyName]).map(policy => this._putRolePolicy(roleName, policy));
 
-						const updatePromises = [
+						return Promise.all([
 							...removePoliciesPromises,
 							...addPoliciesPromises,
-						];
+						]);
+					});
+				// Same for the attached policies.
+				const updateAttachedRolePoliciesPromise = this._listAttachedRolePolicies(roleName)
+					.then(attachedRolePoliciesResponse => {
+						const existingAttachedRolePolicyArns = attachedRolePoliciesResponse.AttachedPolicies.map(attachedPolicy => attachedPolicy.PolicyArn);
+						const expectedAttachedRolePolicyArns = policyArns;
+
+						const detachPolicyArns = _.difference(existingAttachedRolePolicyArns, expectedAttachedRolePolicyArns);
+						const detachPolicyArnsPromises = detachPolicyArns.map(policyArn => this._detachRolePolicy(roleName, policyArn));
+
+						const attachPolicyArns = _.difference(expectedAttachedRolePolicyArns, existingAttachedRolePolicyArns);
+						const attachPolicyArnsPromises = attachPolicyArns.map(policyArn => this._attachRolePolicy(roleName, policyArn));
+
+						return Promise.all([
+							...detachPolicyArnsPromises,
+							...attachPolicyArnsPromises,
+						]);
+					});
+
+				return Promise.all([updateRolePoliciesPromise, updateAttachedRolePoliciesPromise])
+					.then(() => {
+						const updatePromises = [];
 						if (response.Role.Description !== attributes.Description) {
 							logger.debug(`[${roleName}]: Updating description`);
 							updatePromises.push(this._updateRoleDescription(roleName, attributes.Description));
@@ -290,9 +353,10 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 */
 	delete(role) {
 		const roleName = role.metadata.name;
-		return this._listRolePolicies(roleName)
-			.then(response => Promise.all(response.PolicyNames.map(policyName => this._deleteRolePolicy(roleName, policyName))))
-			.then(() => this._deleteRole(roleName));
+		return Promise.all([
+			this._listRolePolicies(roleName).then(response => Promise.all(response.PolicyNames.map(policyName => this._deleteRolePolicy(roleName, policyName)))),
+			this._listAttachedRolePolicies(roleName).then(response => Promise.all(response.AttachedPolicies.map(attachedPolicy => this._detachRolePolicy(roleName, attachedPolicy.PolicyArn))))
+		]).then(() => this._deleteRole(roleName));
 	}
 }
 
