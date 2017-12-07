@@ -255,8 +255,11 @@ class IAMRole { // eslint-disable-line padded-blocks
 						})).reduce((result, value) => Object.assign(result, {[value.name]: value.policy}), {});
 						const existingRolePolicyNames = rolePoliciesResponse.PolicyNames;
 						const expectedPolicyNames = Object.keys(expectedPoliciesByName);
-						const removePoliciesPromises = _.difference(existingRolePolicyNames, expectedPolicyNames).map(policyName => this._deleteRolePolicy(roleName, policyName));
-						const addPoliciesPromises = _.difference(expectedPolicyNames, existingRolePolicyNames).map(policyName => expectedPoliciesByName[policyName]).map(policy => this._putRolePolicy(roleName, policy));
+						const removePolicyNames = _.difference(existingRolePolicyNames, expectedPolicyNames);
+						const removePoliciesPromises = removePolicyNames.map(policyName => this._deleteRolePolicy(roleName, policyName));
+
+						const addPolicyNames = _.difference(expectedPolicyNames, existingRolePolicyNames);
+						const addPoliciesPromises = addPolicyNames.map(policyName => expectedPoliciesByName[policyName]).map(policy => this._putRolePolicy(roleName, policy));
 
 						const updatePromises = [
 							...removePoliciesPromises,
