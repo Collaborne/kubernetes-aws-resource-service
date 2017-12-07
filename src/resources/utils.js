@@ -21,7 +21,7 @@ function capitalize(s) {
 }
 
 function capitalizeFieldNames(object) {
-	if (!object) {
+	if (!object || typeof object !== 'object') {
 		return object;
 	}
 

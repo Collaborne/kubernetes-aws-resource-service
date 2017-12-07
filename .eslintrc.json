@@ -19,6 +19,15 @@
 			"parserOptions": {
 				"sourceType": "script"
 			}
+		},
+		{
+			"files": "test/**/*.spec.js",
+			"env": {
+				"mocha": true
+			},
+			"rules": {
+				"no-unused-expressions": "warn"
+			}
 		}
 	]
 }
