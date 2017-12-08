@@ -95,9 +95,14 @@ const iamClientOptions = {
 	endpoint: process.env.AWS_IAM_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION
 };
+const s3ClientOptions = {
+	endpoint: process.env.AWS_S3_ENDPOINT_URL_OVERRIDE,
+	region: process.env.AWS_REGION
+};
 
 const SQSQueue = require('./resources/sqs');
 const IAMRole = require('./resources/iam');
+const S3Bucket = require('./resources/s3');
 const PromisesQueue = require('./promises-queue');
 
 // Set up the express server for /metrics
@@ -132,6 +137,9 @@ const listener = server.listen(argv.port, () => {
 			}, {
 				resourceClient: new IAMRole(iamClientOptions),
 				type: 'roles',
+			}, {
+				resourceClient: new S3Bucket(s3ClientOptions),
+				type: 'buckets',
 			}
 		].filter(resourceDescription => argv.resourceType.length === 0 || argv.resourceType.indexOf(resourceDescription.type) !== -1);
 		logger.debug(`Enabled resource types: ${resourceDescriptions.map(resourceDescription => resourceDescription.type)}`);

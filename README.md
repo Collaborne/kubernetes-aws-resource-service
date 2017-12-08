@@ -16,6 +16,7 @@ An "operator" service to automatically manage AWS resources based on kubernetes 
   ```
   
   All attributes are converted into strings, embedded `redrivePolicy` and `policy` attributes using `JSON.stringify()`.
+* S3 buckets: Currently only create and delete is supported (update leads to an error message).
 * Others? [PRs welcome :D](https://github.com/Collaborne/kubernetes-aws-resource-service/compare)
   
 

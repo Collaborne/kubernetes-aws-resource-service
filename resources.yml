@@ -18,3 +18,11 @@ description: "A specification of an IAM role"
 versions:
 - name: v1
 ---
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+metadata:
+  name: bucket.aws.k8s.collaborne.com
+description: "A specification of a S3 bucket"
+versions:
+- name: v1
+---
