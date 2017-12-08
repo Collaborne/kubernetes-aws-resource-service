@@ -137,7 +137,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		const bucketName = bucket.metadata.name;
 		return this._headBucket(bucketName)
 			.catch(err => {
-				if (err.name === 'NoSuchBucket') {
+				if (err.name === 'NotFound') {
 					// Bucket doesn't exist: this means kubernetes saw an update, but in fact the bucket was never created,
 					// or has been deleted in the meantime. Create it again.
 					logger.info(`[${bucketName}]: Bucket does not/no longer exist, re-creating it`);
