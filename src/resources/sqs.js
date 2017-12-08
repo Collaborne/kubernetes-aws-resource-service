@@ -185,16 +185,6 @@ class SQSQueue { // eslint-disable-line padded-blocks
 	update(queue) {
 		const queueName = queue.metadata.name;
 		return this._getQueueUrl(queueName)
-			.catch(err => {
-				if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
-					// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
-					// or has been deleted in the meantime. Create it again.
-					logger.info(`[${queueName}]: Queue does not/no longer exist, re-creating it`);
-					return this.create(queue);
-				}
-
-				throw err;
-			})
 			.then(response => {
 				const queueUrl = response.QueueUrl;
 				return this._getQueueAttributes(queueName, queueUrl, ['QueueArn'])
@@ -213,6 +203,16 @@ class SQSQueue { // eslint-disable-line padded-blocks
 
 						return this._setQueueAttributes(queueName, queueUrl, attributes);
 					});
+			})
+			.catch(err => {
+				if (err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
+					// Queue doesn't exist: this means kubernetes saw an update, but in fact the queue was never created,
+					// or has been deleted in the meantime. Create it again.
+					logger.info(`[${queueName}]: Queue does not/no longer exist, re-creating it`);
+					return this.create(queue);
+				}
+
+				throw err;
 			});
 	}
 

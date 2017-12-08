@@ -136,6 +136,10 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	update(bucket) {
 		const bucketName = bucket.metadata.name;
 		return this._headBucket(bucketName)
+			.then(response => {
+				logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
+				return response;
+			})
 			.catch(err => {
 				if (err.name === 'NotFound') {
 					// Bucket doesn't exist: this means kubernetes saw an update, but in fact the bucket was never created,
@@ -145,10 +149,6 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				}
 
 				throw err;
-			})
-			.then(response => {
-				logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
-				return response;
 			});
 	}
 

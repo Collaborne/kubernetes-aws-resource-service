@@ -267,15 +267,6 @@ class IAMRole { // eslint-disable-line padded-blocks
 		const roleName = role.metadata.name;
 		const {attributes, policies, policyArns} = this._translateAttributes(role);
 		return this._getRole(roleName)
-			.catch(err => {
-				// If not there: create it.
-				if (err.name === 'NoSuchEntity') {
-					logger.info(`[${roleName}]: Role does not/no longer exist, re-creating it`);
-					return this.create(role);
-				}
-
-				throw new Error(`Cannot update role ${roleName}: ${err.message}`);
-			})
 			.then(response => {
 				// First check the path: It cannot be changed, so we will not allow any update to it.
 				// The default value is a '/' (see https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreatePolicy.html), so we need to check that
@@ -342,6 +333,15 @@ class IAMRole { // eslint-disable-line padded-blocks
 
 						return Promise.all(updatePromises);
 					});
+			})
+			.catch(err => {
+				// If not there: create it.
+				if (err.name === 'NoSuchEntity') {
+					logger.info(`[${roleName}]: Role does not/no longer exist, re-creating it`);
+					return this.create(role);
+				}
+
+				throw new Error(`Cannot update role ${roleName}: ${err.message}`);
 			});
 	}
 
