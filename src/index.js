@@ -91,9 +91,10 @@ const sqsClientOptions = {
 	endpoint: process.env.AWS_SQS_ENDPOINT_URL_OVERRIDE,
 	region: process.env.AWS_REGION,
 };
+// NB: IAM is region-less, so we need to be able to control the region used independently from the other resources
 const iamClientOptions = {
 	endpoint: process.env.AWS_IAM_ENDPOINT_URL_OVERRIDE,
-	region: process.env.AWS_REGION
+	region: process.env.AWS_IAM_REGION || 'us-east-1'
 };
 const s3ClientOptions = {
 	endpoint: process.env.AWS_S3_ENDPOINT_URL_OVERRIDE,
