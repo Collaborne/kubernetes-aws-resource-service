@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {capitalize, delay, isTransientNetworkError} = require('./utils');
+const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('S3');
 
@@ -62,7 +62,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				break;
 			}
 			// Convert to string
-			const resultValue = `${value}`;
+			const resultValue = capitalizeFieldNames(value);
 			logger.debug(`[${bucket.metadata.name}]: Attribute ${key} = ${resultValue}`);
 
 			result[resultKey] = resultValue;
