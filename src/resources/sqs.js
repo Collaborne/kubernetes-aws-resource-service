@@ -1,5 +1,6 @@
 const AWS = require('aws-sdk');
 
+require('./kubernetes');
 const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
@@ -11,16 +12,6 @@ const logger = require('log4js').getLogger('SQSQueue');
  * @property {KubernetesMetadata} metadata
  * @property {QueueSpec} spec
  * @property {QueueStatus} [status]
- */
-
-/**
- * Kubernetes resource metadata
- *
- * @typedef KubernetesMetadata
- * @property {String} [namespace]
- * @property {String} name
- * @property {Object.<String,String>} [labels]
- * @property {Object.<String,String>} [metadata]
  */
 
 /**

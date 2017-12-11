@@ -2,6 +2,7 @@ const AWS = require('aws-sdk');
 
 const _ = require('lodash');
 
+require('./kubernetes');
 const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError, md5} = require('./utils');
 
 /**
@@ -11,16 +12,6 @@ const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError, md5} = 
  * @property {KubernetesMetadata} metadata
  * @property {RoleSpec} spec
  * @property {RoleStatus} [status]
- */
-
-/**
- * Kubernetes resource metadata
- *
- * @typedef KubernetesMetadata
- * @property {String} [namespace]
- * @property {String} name
- * @property {Object.<String,String>} [labels]
- * @property {Object.<String,String>} [metadata]
  */
 
 /**
