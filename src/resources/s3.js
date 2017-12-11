@@ -10,7 +10,7 @@ const logger = require('log4js').getLogger('S3');
  * @typedef Bucket
  * @property {KubernetesMetadata} metadata
  * @property {BucketSpec} spec
- * @property {BucketStatus} status
+ * @property {BucketStatus} [status]
  */
 
 /**

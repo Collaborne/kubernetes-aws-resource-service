@@ -10,7 +10,7 @@ const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError, md5} = 
  * @typedef Role
  * @property {KubernetesMetadata} metadata
  * @property {RoleSpec} spec
- * @property {RoleStatus} status
+ * @property {RoleStatus} [status]
  */
 
 /**

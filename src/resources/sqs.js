@@ -10,7 +10,7 @@ const logger = require('log4js').getLogger('SQSQueue');
  * @typedef Queue
  * @property {KubernetesMetadata} metadata
  * @property {QueueSpec} spec
- * @property {QueueStatus} status
+ * @property {QueueStatus} [status]
  */
 
 /**
