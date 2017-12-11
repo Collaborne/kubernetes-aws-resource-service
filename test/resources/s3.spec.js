@@ -49,4 +49,31 @@ describe('s3', function utilsTest() {
 			expect(attributes).to.be.deep.equal(expectedResult);
 		});
 	});
+	describe('create behavior', () => {
+		it('invokes update when the bucket exists for this account', done => {
+			class TestS3Bucket extends S3Bucket {
+				update(bucket) {
+					return Promise.resolve({updateInvoked: bucket.metadata.name});
+				}
+
+				_createBucket(bucketName, attributes) { // eslint-disable-line no-unused-vars
+					const err = new Error(`Simulating ${bucketName} already owned by current account`);
+					err.name = 'BucketAlreadyOwnedByYou';
+					return Promise.reject(err);
+				}
+			}
+
+			const bucket = {
+				metadata: {
+					name: 'test-bucket'
+				},
+				spec: {}
+			};
+			const bucketHandler = new TestS3Bucket();
+			bucketHandler.create(bucket).then(result => {
+				expect(result.updateInvoked).to.be.equal(bucket.metadata.name);
+				done();
+			});
+		});
+	});
 });

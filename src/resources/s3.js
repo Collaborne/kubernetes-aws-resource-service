@@ -122,7 +122,15 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	create(bucket) {
 		const attributes = this._translateAttributes(bucket);
-		return this._createBucket(bucket.metadata.name, attributes);
+		return this._createBucket(bucket.metadata.name, attributes)
+			.catch(err => {
+				if (err.name === 'BucketAlreadyOwnedByYou') {
+					logger.info(`[${bucket.metadata.name}]: Bucket exists already and is owned by us, applying update instead`);
+					return this.update(bucket);
+				}
+
+				throw err;
+			});
 	}
 
 	/**
