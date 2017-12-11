@@ -4,7 +4,7 @@ const expect = chai.expect;
 const S3Bucket = require('../../src/resources/s3');
 
 describe('s3', function utilsTest() {
-	describe('_translateAttributes behavior', function capitalizeFieldNamesTest() {
+	describe('_translateAttributes behavior', () => {
 		it('uppercase the acl field', () => {
 			const s3 = new S3Bucket();
 			const attributes = s3._translateAttributes({
