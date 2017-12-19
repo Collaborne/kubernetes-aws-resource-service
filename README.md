@@ -62,4 +62,9 @@ _Currently only create and delete is supported, attempts to update a bucket are 
        action: "sqs:*"
   ```
 
+### IAM Roles
 
+| Property     | AWS SDK property | Notes
+|--------------|------------------|------
+| `policies`   | (No equivalent)  | The `policies` element contains an array of AWS IAM Policy definitions that are directly added to the role. The name of the policy is generated from the content, and updating works by comparing these names. **Note that automatic capitalization is not applied to the contents of the `Condition` of a policy.
+| `policyArns` | (No equivalent)  | The `policyArns` element contains an array of AWS IAM policy ARNs, which are attached to the role.
