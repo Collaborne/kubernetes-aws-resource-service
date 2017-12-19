@@ -20,15 +20,30 @@ function capitalize(s) {
 	return s[0].toUpperCase() + s.substring(1);
 }
 
-function capitalizeFieldNames(object) {
+function capitalizeFieldNamesForPath(path, object, recurse) {
 	if (!object || typeof object !== 'object') {
 		return object;
 	}
 
 	return Object.keys(object).reduce((result, key) => {
-		result[capitalize(key)] = capitalizeFieldNames(object[key]);
+		result[capitalize(key)] = recurse(path.concat([key]), object[key], recurse);
 		return result;
 	}, Array.isArray(object) ? [] : {});
+}
+
+/**
+ * Capitalize all field names recursively in a given object.
+ *
+ * When the provided `object` is not actually an object it will be returned unmodified.
+ *
+ * @param {any} object the object to work on
+ * @param {*} [capitalizeFieldNamesForPathHelper] recursion helper function, defaults to `capitalizeFieldNamesForPath`
+ * @return {any} the incoming object with field names recursively capitalized
+ */
+function capitalizeFieldNames(object, capitalizeFieldNamesForPathHelper) {
+	// NB: We cannot use default parameters here, as these get evaluated at the call-site, where the helper may not be imported.
+	const helper = capitalizeFieldNamesForPathHelper || capitalizeFieldNamesForPath;
+	return helper([], object, helper);
 }
 
 function md5(data) {
@@ -52,6 +67,7 @@ function delay(after) {
 module.exports = {
 	capitalize,
 	capitalizeFieldNames,
+	capitalizeFieldNamesForPath,
 	delay,
 	isTransientNetworkError,
 	md5

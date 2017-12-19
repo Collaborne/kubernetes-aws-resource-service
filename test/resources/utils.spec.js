@@ -29,5 +29,25 @@ describe('utils', function utilsTest() {
 			expect(capitalized.length).to.be.equal(1);
 			expect(Object.keys(capitalized[0])).to.be.deep.equal(['Bar']);
 		});
+		it('invokes the provided recursion helper', () => {
+			const object = {Foo: 'bar'};
+			let called = false;
+			const helper = (path, value, recurse) => {
+				called = true;
+				return utils.capitalizeFieldNamesForPath(path, value, recurse);
+			};
+			utils.capitalizeFieldNames(object, helper);
+			expect(called).to.be.true;
+		});
+		it('provides the object path to the recursion helper', () => {
+			const object = {Foo: {Bar: ['baz']}};
+			let lastPath = [];
+			const helper = (path, value, recurse) => {
+				lastPath = path;
+				return utils.capitalizeFieldNamesForPath(path, value, recurse);
+			};
+			utils.capitalizeFieldNames(object, helper);
+			expect(lastPath).to.be.deep.equal(['Foo', 'Bar', '0']);
+		});
 	});
 });
