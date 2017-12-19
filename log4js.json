@@ -1,0 +1,12 @@
+{
+	"appenders": {
+		"out": { "type": "console" }
+	},
+	"replaceConsole": true,
+	"categories": {
+		"default": {
+			"appenders": [ "out" ],
+			"level": "debug"
+		}
+	}
+}
