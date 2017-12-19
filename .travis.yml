@@ -23,7 +23,7 @@ before_install:
 - "if [ -d node_modules ] && [ x$(cat node_modules/.last-node-version 2>/dev/null) != x$(node -e 'console.log(process.version)') ]; then npm rebuild --update-binary && node -e 'console.log(process.version)' > node_modules/.last-node-version; fi"
 install:
 - npm install
-- npm prune && npm shrinkwrap && mkdir -p deploy && cp package.json npm-shrinkwrap.json deploy && cp -r src deploy/src && npm install --production --prefix deploy --ignore-scripts
+- npm prune && npm shrinkwrap && mkdir -p deploy && cp -r package.json npm-shrinkwrap.json src deploy && npm install --production --prefix deploy --ignore-scripts
 after_success:
 - docker build `echo ${TAGS} | sed -re "s,\b([-._[:alnum:]]+)\b,-t ${DOCKER_NAME}:\1,g"` .
 deploy:
