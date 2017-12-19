@@ -26,16 +26,9 @@ function capitalizeFieldNames(object) {
 	}
 
 	return Object.keys(object).reduce((result, key) => {
-		let value = object[key];
-		if (Array.isArray(value)) {
-			value = value.map(item => capitalizeFieldNames(item));
-		} else if (typeof value === 'object') {
-			value = capitalizeFieldNames(value);
-		}
-
-		result[capitalize(key)] = value;
+		result[capitalize(key)] = capitalizeFieldNames(object[key]);
 		return result;
-	}, {});
+	}, Array.isArray(object) ? [] : {});
 }
 
 function md5(data) {

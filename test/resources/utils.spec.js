@@ -18,5 +18,16 @@ describe('utils', function utilsTest() {
 			const object = {Foo: 'bar'};
 			expect(Object.keys(utils.capitalizeFieldNames(object))).to.be.deep.equal(['Foo']);
 		});
+		it('capitalizes objects in an array', () => {
+			const object = {foo: [{bar: 'baz'}]};
+			const capitalized = utils.capitalizeFieldNames(object);
+			expect(Object.keys(capitalized.Foo[0])).to.be.deep.equal(['Bar']);
+		});
+		it('capitalizes objects in an array (root)', () => {
+			const array = [{bar: 'baz'}];
+			const capitalized = utils.capitalizeFieldNames(array);
+			expect(capitalized.length).to.be.equal(1);
+			expect(Object.keys(capitalized[0])).to.be.deep.equal(['Bar']);
+		});
 	});
 });
