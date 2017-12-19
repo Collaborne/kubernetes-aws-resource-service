@@ -3,7 +3,7 @@ const AWS = require('aws-sdk');
 const _ = require('lodash');
 
 require('./kubernetes');
-const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError, md5} = require('./utils');
+const {capitalize, capitalizeFieldNames, capitalizeFieldNamesForPath, delay, isTransientNetworkError, md5} = require('./utils');
 
 /**
  * A IAM Role
@@ -54,6 +54,14 @@ class IAMRole { // eslint-disable-line padded-blocks
 	 * @property {string[]} policyArns
 	 */
 
+	_capitalizeFieldNamesForPathExceptCondition(path, object, recurse) {
+		if (path.length > 0 && capitalize(path[path.length - 1]) === 'Condition') {
+			return object;
+		}
+
+		return capitalizeFieldNamesForPath(path, object, recurse);
+	}
+
 	/**
 	 * Convert the resource.spec parts from camelCase to AWS CapitalCase.
 	 *
@@ -69,7 +77,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 			let resultValue;
 			switch (key) {
 			case 'policies':
-				value.map(capitalizeFieldNames).forEach(policy => policies.push(policy));
+				value.map(policy => capitalizeFieldNames(policy, this._capitalizeFieldNamesForPathExceptCondition)).forEach(policy => policies.push(policy));
 				// Don't process this further: 'policies' does not actually belong into an IAM::Role.
 				return result;
 			case 'policyArns':
@@ -79,7 +87,7 @@ class IAMRole { // eslint-disable-line padded-blocks
 			case 'assumeRolePolicyDocument':
 				// Apply the default version if it is missing. This simplifies later comparisions of these values.
 				// See http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_version.html
-				resultValue = JSON.stringify(Object.assign({Version: '2008-10-17'}, capitalizeFieldNames(value)));
+				resultValue = JSON.stringify(Object.assign({Version: '2008-10-17'}, capitalizeFieldNames(value, this._capitalizeFieldNamesForPathExceptCondition)));
 				break;
 			default:
 				// Convert to string
