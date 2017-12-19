@@ -19,8 +19,6 @@ See below for notes on specific resource types.
 
 ### S3 buckets
 
-Special properties:
-
 | Property | AWS SDK property | Notes
 |----------|------------------|------
 | `acl`    | `ACL`            | Uses all-lowercase name instead of all-caps
