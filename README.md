@@ -4,23 +4,30 @@ An "operator" service to automatically manage AWS resources based on kubernetes 
 
 ## Supported Resources
 
-[resources.yml](/resources.yml) has the definitions of all supported resources.
+[resources.yml](/resources.yml) has the definitions of all currently supported resources. This file should be loaded into the cluster before using the kubernetes-aws-resource-service to create the ThirdPartyResources.
+
+```sh
+kubectl apply -f resources.yml
+```
+
+### General Notes
+
+1. The resource specification parts follow the AWS SDK naming, but use smallCamelCapitalization to better fit with the naming of properties in Kubernetes
+2. When the the AWS SDK uses JSON-as-String for attributes these JSON elements are automatically created from the resource description
+
+See below for notes on specific resource types.
 
 ### S3 buckets
 
-Supported fields:
+Special properties:
 
-| AWS field | Field in resource definition |
-|--------------|-----------|
-| ACL | acl |
-| CreateBucketConfiguration.LocationConstraint | createBucketConfiguration.locationConstraint |
-| GrantFullControl | grantFullControl |
-| GrantRead | grantRead |
-| GrantReadACP | grantReadACP |
-| GrantWrite | grantWrite |
-| GrantWriteACP | grantWriteACP |
+| Property | AWS SDK property | Notes
+|----------|------------------|------
+| `acl`    | `ACL`            | Uses all-lowercase name instead of all-caps
 
 See here the [description of the AWS fields](http://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketPUT.html).
+
+_Currently only create and delete is supported, attempts to update a bucket are ignored and logged as an error._
 
 #### Example
 
@@ -33,15 +40,14 @@ See here the [description of the AWS fields](http://docs.aws.amazon.com/AmazonS3
       acl: 'private'
       createBucketConfiguration:
         locationConstraint: 'EU'
-      grantFullControl: 'grantFullControl'
-      grantRead: 'grantRead'
-      grantReadACP: 'grantReadACP'
-      grantWrite: 'grantWrite'
-      grantWriteACP: 'grantWriteACP'
   ```
 
 ### SQS queues
 
+| Property        | AWS SDK property | Notes
+|-----------------|------------------|------
+| `policy`        | `Policy`         | Should be written directly in the YAML, and will get encoded into JSON. The `Resource` field in the policy will be automatically set to the ARN of the queue
+| `redrivePolicy` | `RedrivePolicy`  | Should be written directly in the YAML, and will get encoded into JSON.
 #### Example
 
   ```yaml
@@ -49,13 +55,11 @@ See here the [description of the AWS fields](http://docs.aws.amazon.com/AmazonS3
   metadata:
     name: my-queue
   spec:
-    anyAwsSqsQueueAttribute: value
+    policy:
+     version: "2012-10-17"
+     statement:
+     - effect: Allow
+       action: "sqs:*"
   ```
 
-### General
-
-All attributes are converted into strings, embedded `redrivePolicy` and `policy` attributes using `JSON.stringify()`.
-* S3 buckets: Currently only create and delete is supported (update leads to an error message).
-* Others? [PRs welcome :D](https://github.com/Collaborne/kubernetes-aws-resource-service/compare)
-  
 
