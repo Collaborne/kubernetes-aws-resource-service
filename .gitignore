@@ -10,3 +10,5 @@ yarn.lock
 *.rej
 *.porig
 
+/.nyc_output/
+
