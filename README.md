@@ -29,16 +29,16 @@ _Currently only create and delete is supported, attempts to update a bucket are 
 
 #### Example
 
-  ```yaml
-  kind: Bucket
-  metadata:
-    name: TestBucket
+```yaml
+kind: Bucket
+metadata:
+  name: TestBucket
+spec:
   spec:
-    spec:
-      acl: 'private'
-      createBucketConfiguration:
-        locationConstraint: 'EU'
-  ```
+    acl: 'private'
+    createBucketConfiguration:
+      locationConstraint: 'EU'
+```
 
 ### SQS queues
 
@@ -48,17 +48,17 @@ _Currently only create and delete is supported, attempts to update a bucket are 
 | `redrivePolicy` | `RedrivePolicy`  | Should be written directly in the YAML, and will get encoded into JSON.
 #### Example
 
-  ```yaml
-  kind: Queue
-  metadata:
-    name: my-queue
-  spec:
-    policy:
-     version: "2012-10-17"
-     statement:
-     - effect: Allow
-       action: "sqs:*"
-  ```
+```yaml
+kind: Queue
+metadata:
+  name: my-queue
+spec:
+  policy:
+    version: "2012-10-17"
+    statement:
+    - effect: Allow
+      action: "sqs:*"
+```
 
 ### IAM Roles
 
