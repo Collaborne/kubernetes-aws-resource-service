@@ -66,3 +66,30 @@ spec:
 |--------------|------------------|------
 | `policies`   | (No equivalent)  | The `policies` element contains an array of AWS IAM Policy definitions that are directly added to the role. The name of the policy is generated from the content, and updating works by comparing these names. **Note that automatic capitalization is not applied to the contents of the `Condition` of a policy.**
 | `policyArns` | (No equivalent)  | The `policyArns` element contains an array of AWS IAM policy ARNs, which are attached to the role.
+
+#### Example
+
+```yaml
+kind: Role
+metadata:
+  name: my-role
+spec:
+  path: /role-path/
+  assumeRolePolicyDocument:
+    version: 2012-10-17
+    statement:
+    - action: sts:AssumeRole
+      effect: Allow
+      principal:
+        service: ec2.amazonaws.com
+  policies:
+  - version: 2012-10-17
+    statement:
+    - action:
+      - 'ec2:*'
+      effect: Allow
+      resource:
+      - '*'
+  policyArns:
+  - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+```
