@@ -42,7 +42,7 @@
     "eslint": "^4.12.0",
     "eslint-config-collaborne": "^1.1.1",
     "mocha": "^5.0.0",
-    "nyc": "^11.4.1"
+    "nyc": "^12.0.1"
   },
   "engines": {
     "node": ">=8.9.0"
