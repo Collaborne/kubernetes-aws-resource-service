@@ -50,7 +50,7 @@ describe('s3', function utilsTest() {
 		});
 	});
 	describe('create behavior', () => {
-		it('invokes update when the bucket exists for this account', done => {
+		it('invokes update when the bucket exists for this account', async() => {
 			class TestS3Bucket extends S3Bucket {
 				update(bucket) {
 					return Promise.resolve({updateInvoked: bucket.metadata.name});
@@ -70,10 +70,8 @@ describe('s3', function utilsTest() {
 				spec: {}
 			};
 			const bucketHandler = new TestS3Bucket();
-			bucketHandler.create(bucket).then(result => {
-				expect(result.updateInvoked).to.be.equal(bucket.metadata.name);
-				done();
-			});
+			const result = await bucketHandler.create(bucket);
+			expect(result.updateInvoked).to.be.equal(bucket.metadata.name);
 		});
 	});
 });
