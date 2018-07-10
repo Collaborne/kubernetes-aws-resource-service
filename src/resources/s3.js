@@ -100,7 +100,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			}
 			// Convert to string
 			const resultValue = capitalizeFieldNames(value);
-			logger.debug(`[${bucket.metadata.name}]: Attribute ${key} = ${resultValue}`);
+			logger.debug(`[${bucket.metadata.name}]: Attribute ${key} = ${JSON.stringify(resultValue)}`);
 
 			result[resultKey] = resultValue;
 			return result;
