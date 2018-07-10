@@ -102,6 +102,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _putBucketAcl(bucketName, aclAttributes) {
+		if (aclAttributes.Bucket && aclAttributes.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
+		}
+		const request = Object.assign({}, aclAttributes, {
+			Bucket: bucketName
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketAcl', this.s3.putBucketAcl, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure bucket ACL');
+		}
+	}
+
 	async _deleteBucket(bucketName) {
 		const request = {
 			Bucket: bucketName
@@ -121,6 +135,17 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			return await this._retryOnTransientNetworkErrors('S3::HeadBucket', this.s3.headBucket, [request]);
 		} catch (err) {
 			return this._reportError(bucketName, err, 'Cannot head bucket');
+		}
+	}
+
+	async _getBucketLocation(bucketName) {
+		const request = {
+			Bucket: bucketName
+		};
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::GetBucketLocation', this.s3.getBucketLocation, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot get bucket location');
 		}
 	}
 
@@ -157,6 +182,18 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		try {
 			const response = await this._headBucket(bucketName);
 			logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
+
+			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
+			const {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}} = this._translateAttributes(bucket);
+			const locationConstraint = await this._getBucketLocation(bucketName);
+			if (locationConstraint !== createBucketConfiguration.locationConstraint) {
+				logger.error(`[${bucketName}]: Cannot update bucket location`);
+				throw new Error('Invalid update');
+			}
+
+			// - acl: Overwrite it, letting AWS handle the problem of "update"
+			await this._putBucketAcl(bucketName, {ACL});
+
 			return response;
 		} catch (err) {
 			if (err.name === 'NotFound') {
