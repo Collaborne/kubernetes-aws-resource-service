@@ -20,11 +20,22 @@ const logger = require('log4js').getLogger('S3');
  * @typedef BucketSpec
  * @property {("private"|"public-read"|"public-read-write"|"aws-exec-read"|"authenticated-read"|"bucket-owner-read"|"bucket-owner-full-control"|"log-delivery-write")} [acl] The canned ACL to apply to the bucket
  * @property {CreateBucketConfiguration} [createBucketConfiguration]
+ * @property {LoggingConfiguration} [loggingConfiguration]
  */
 
 /**
  * @typedef CreateBucketConfiguration
  * @property {("EU"|"eu-west-1"|"us-west-1"|"us-west-2"|"ap-south-1"|"ap-southeast-1"|"ap-southeast-2"|"ap-northeast-1"|"sa-east-1"|"cn-north-1"|"eu-central-1")} locationConstraint
+ */
+
+/**
+ * Configuration of S3 bucket access logging.
+ *
+ * This structure is based on the definition in CloudFormation.
+ *
+ * @typedef LoggingConfiguration
+ * @property {string} destinationBucketName
+ * @property {string} logFilePrefix
  */
 
 /**
@@ -40,13 +51,43 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	/**
-	 * Convert the bucket.spec parts from camelCase to AWS CapitalCase.
+	 * Translate the logging configuration into the 'logging params' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {LoggingConfiguration} loggingConfiguration logging configuration
+	 * @returns {Object} the parameters for `putBucketLogging`
+	 */
+	_translateLoggingConfiguration(bucketName, loggingConfiguration) {
+		let status;
+		if (!loggingConfiguration) {
+			status = {};
+		} else {
+			status = {
+				LoggingEnabled: {
+					TargetBucket: loggingConfiguration.destinationBucketName,
+					TargetPrefix: loggingConfiguration.logFilePrefix,
+				}
+			};
+		}
+
+		return {
+			Bucket: bucketName,
+			BucketLoggingStatus: status
+		};
+	}
+
+	/**
+	 * Convert the bucket.spec into parameters for the various AWS SDK operations.
+	 *
+	 * The resulting elements do not have the bucket name set.
 	 *
 	 * @param {Bucket} bucket a bucket definition
 	 * @return {Object} the bucket attributes
 	 */
-	_translateAttributes(bucket) {
-		return Object.keys(bucket.spec || {}).reduce((result, key) => {
+	_translateSpec(bucket) {
+		// Split the spec into parts
+		const {loggingConfiguration, ...otherAttributes} = bucket.spec;
+		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
 			switch (key) {
@@ -64,6 +105,10 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			result[resultKey] = resultValue;
 			return result;
 		}, {});
+		return {
+			attributes,
+			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration)
+		};
 	}
 
 	// XXX: logName could be awsOperation.name, except that that is empty for AWS?
@@ -99,6 +144,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			return await this._retryOnTransientNetworkErrors('S3::CreateBucket', this.s3.createBucket, [request]);
 		} catch (err) {
 			return this._reportError(bucketName, err, 'Cannot create bucket');
+		}
+	}
+
+	async _putBucketLogging(bucketName, loggingAttributes) {
+		if (loggingAttributes.Bucket && loggingAttributes.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${loggingAttributes.Bucket}`);
+		}
+		const request = Object.assign({}, loggingAttributes, {
+			Bucket: bucketName
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketLogging', this.s3.putBucketLogging, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure bucket logging');
 		}
 	}
 
@@ -156,9 +215,15 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const attributes = this._translateAttributes(bucket);
+		const {attributes, loggingParams} = this._translateSpec(bucket);
 		try {
-			return await this._createBucket(bucket.metadata.name, attributes);
+			// Create the bucket, and wait until that has happened
+			const response = await this._createBucket(bucket.metadata.name, attributes);
+
+			// Apply all other operations
+			await this._putBucketLogging(bucket.metadata.name, loggingParams);
+
+			return response;
 		} catch (err) {
 			if (err.name === 'BucketAlreadyOwnedByYou') {
 				logger.info(`[${bucket.metadata.name}]: Bucket exists already and is owned by us, applying update instead`);
@@ -184,7 +249,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}} = this._translateAttributes(bucket);
+			const {attributes: {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
 			const locationConstraint = await this._getBucketLocation(bucketName);
 			if (locationConstraint !== createBucketConfiguration.locationConstraint) {
 				logger.error(`[${bucketName}]: Cannot update bucket location`);
@@ -193,6 +258,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 			// - acl: Overwrite it, letting AWS handle the problem of "update"
 			await this._putBucketAcl(bucketName, {ACL});
+			await this._putBucketLogging(bucketName, loggingParams);
 
 			return response;
 		} catch (err) {

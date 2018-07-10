@@ -4,10 +4,10 @@ const expect = chai.expect;
 const S3Bucket = require('../../src/resources/s3');
 
 describe('s3', function utilsTest() {
-	describe('_translateAttributes behavior', () => {
+	describe('_translateSpec behavior', () => {
 		it('uppercase the acl field', () => {
 			const s3 = new S3Bucket();
-			const attributes = s3._translateAttributes({
+			const {attributes} = s3._translateSpec({
 				metadata: {
 					name: 'TestBucket',
 				},
@@ -30,7 +30,7 @@ describe('s3', function utilsTest() {
 				GrantWrite: 'grantWrite',
 				GrantWriteACP: 'grantWriteACP'
 			};
-			const attributes = s3._translateAttributes({
+			const {attributes} = s3._translateSpec({
 				metadata: {
 					name: 'TestBucket',
 				},
