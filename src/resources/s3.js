@@ -67,18 +67,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	// XXX: logName could be awsOperation.name, except that that is empty for AWS?
-	_retryOnTransientNetworkErrors(logName, awsOperation, awsArguments) {
+	async _retryOnTransientNetworkErrors(logName, awsOperation, awsArguments) {
 		const errorRetryDelay = 30000;
-		return awsOperation.apply(this.s3, awsArguments).promise()
-			.catch(err => {
-				if (isTransientNetworkError(err)) {
-					logger.warn(`[${logName}]: transient ${err.code} ${err.errno}, retrying in ${errorRetryDelay / 1000}s`);
-					return delay(errorRetryDelay).then(() => this._retryOnTransientNetworkErrors(logName, awsOperation, awsArguments));
-				}
+		try {
+			return await awsOperation.apply(this.s3, awsArguments).promise();
+		} catch (err) {
+			if (isTransientNetworkError(err)) {
+				logger.warn(`[${logName}]: transient ${err.code} ${err.errno}, retrying in ${errorRetryDelay / 1000}s`);
+				await delay(errorRetryDelay);
+				return this._retryOnTransientNetworkErrors(logName, awsOperation, awsArguments);
+			}
 
-				logger.warn(`[${logName}]: non-retryable error in operation: ${err.message}`);
-				throw err;
-			});
+			logger.warn(`[${logName}]: non-retryable error in operation: ${err.message}`);
+			throw err;
+		}
 	}
 
 	_reportError(logName, err, description) {
@@ -86,28 +88,37 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		throw err;
 	}
 
-	_createBucket(bucketName, attributes) {
+	async _createBucket(bucketName, attributes) {
 		const request = Object.assign({}, attributes, {
 			Bucket: bucketName
 		});
-		return this._retryOnTransientNetworkErrors('S3::CreateBucket', this.s3.createBucket, [request])
-			.catch(err => this._reportError(bucketName, err, 'Cannot create bucket'));
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::CreateBucket', this.s3.createBucket, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot create bucket');
+		}
 	}
 
-	_deleteBucket(bucketName) {
+	async _deleteBucket(bucketName) {
 		const request = {
 			Bucket: bucketName
 		};
-		return this._retryOnTransientNetworkErrors('S3::DeleteBucket', this.s3.deleteBucket, [request])
-			.catch(err => this._reportError(bucketName, err, 'Cannot delete bucket'));
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::DeleteBucket', this.s3.deleteBucket, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot delete bucket');
+		}
 	}
 
-	_headBucket(bucketName) {
+	async _headBucket(bucketName) {
 		const request = {
 			Bucket: bucketName
 		};
-		return this._retryOnTransientNetworkErrors('S3::HeadBucket', this.s3.headBucket, [request])
-			.catch(err => this._reportError(bucketName, err, 'Cannot head bucket'));
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::HeadBucket', this.s3.headBucket, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot head bucket');
+		}
 	}
 
 	/**
@@ -116,17 +127,18 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @param {Bucket} bucket Bucket definition in Kubernetes
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
-	create(bucket) {
+	async create(bucket) {
 		const attributes = this._translateAttributes(bucket);
-		return this._createBucket(bucket.metadata.name, attributes)
-			.catch(err => {
-				if (err.name === 'BucketAlreadyOwnedByYou') {
-					logger.info(`[${bucket.metadata.name}]: Bucket exists already and is owned by us, applying update instead`);
-					return this.update(bucket);
-				}
+		try {
+			return await this._createBucket(bucket.metadata.name, attributes);
+		} catch (err) {
+			if (err.name === 'BucketAlreadyOwnedByYou') {
+				logger.info(`[${bucket.metadata.name}]: Bucket exists already and is owned by us, applying update instead`);
+				return this.update(bucket);
+			}
 
-				throw err;
-			});
+			throw err;
+		}
 	}
 
 	/**
@@ -137,23 +149,22 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @param {Bucket} bucket Bucket definition in Kubernetes
 	 * @return {Promise<any>} promise that resolves when the bucket is updated
 	 */
-	update(bucket) {
+	async update(bucket) {
 		const bucketName = bucket.metadata.name;
-		return this._headBucket(bucketName)
-			.then(response => {
-				logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
-				return response;
-			})
-			.catch(err => {
-				if (err.name === 'NotFound') {
-					// Bucket doesn't exist: this means kubernetes saw an update, but in fact the bucket was never created,
-					// or has been deleted in the meantime. Create it again.
-					logger.info(`[${bucketName}]: Bucket does not/no longer exist, re-creating it`);
-					return this.create(bucket);
-				}
+		try {
+			const response = await this._headBucket(bucketName);
+			logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
+			return response;
+		} catch (err) {
+			if (err.name === 'NotFound') {
+				// Bucket doesn't exist: this means kubernetes saw an update, but in fact the bucket was never created,
+				// or has been deleted in the meantime. Create it again.
+				logger.info(`[${bucketName}]: Bucket does not/no longer exist, re-creating it`);
+				return this.create(bucket);
+			}
 
-				throw err;
-			});
+			throw err;
+		}
 	}
 
 	/**
