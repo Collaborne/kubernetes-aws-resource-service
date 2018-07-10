@@ -243,15 +243,27 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is updated
 	 */
 	async update(bucket) {
+		function isCompatibleBucketLocation(location, locationRequested) {
+			if (location === locationRequested) {
+				return true;
+			}
+
+			if (locationRequested === 'EU') {
+				return location.startsWith('eu-');
+			}
+
+			return false;
+		}
+
 		const bucketName = bucket.metadata.name;
 		try {
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
-			const locationConstraint = await this._getBucketLocation(bucketName);
-			if (locationConstraint !== createBucketConfiguration.locationConstraint) {
-				logger.error(`[${bucketName}]: Cannot update bucket location from ${locationConstraint} to ${createBucketConfiguration.locationConstraint}`);
+			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
+			const bucketLocation = await this._getBucketLocation(bucketName);
+			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
+				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
 				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
