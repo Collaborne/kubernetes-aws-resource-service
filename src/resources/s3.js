@@ -251,8 +251,8 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const {attributes: {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
 			const locationConstraint = await this._getBucketLocation(bucketName);
 			if (locationConstraint !== createBucketConfiguration.locationConstraint) {
-				logger.error(`[${bucketName}]: Cannot update bucket location`);
-				throw new Error('Invalid update');
+				logger.error(`[${bucketName}]: Cannot update bucket location from ${locationConstraint} to ${createBucketConfiguration.locationConstraint}`);
+				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
 			// - acl: Overwrite it, letting AWS handle the problem of "update"
