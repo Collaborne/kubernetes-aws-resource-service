@@ -12,10 +12,10 @@ describe('s3', function utilsTest() {
 					name: 'TestBucket',
 				},
 				spec: {
-					acl: 'public'
+					acl: 'public-read'
 				}
 			});
-			expect(attributes.ACL).to.be.equal('public');
+			expect(attributes.ACL).to.be.equal('public-read');
 		});
 		it('translates all fields', () => {
 			const s3 = new S3Bucket();
