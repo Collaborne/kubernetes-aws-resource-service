@@ -89,6 +89,9 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	async _createBucket(bucketName, attributes) {
+		if (attributes.Bucket && attributes.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${attributes.Bucket}`);
+		}
 		const request = Object.assign({}, attributes, {
 			Bucket: bucketName
 		});
