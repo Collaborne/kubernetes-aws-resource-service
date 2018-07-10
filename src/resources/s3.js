@@ -17,9 +17,14 @@ const logger = require('log4js').getLogger('S3');
 /**
  * A bucket specification
  *
- * @see http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
- *
  * @typedef BucketSpec
+ * @property {("private"|"public-read"|"public-read-write"|"aws-exec-read"|"authenticated-read"|"bucket-owner-read"|"bucket-owner-full-control"|"log-delivery-write")} [acl] The canned ACL to apply to the bucket
+ * @property {CreateBucketConfiguration} [createBucketConfiguration]
+ */
+
+/**
+ * @typedef CreateBucketConfiguration
+ * @property {("EU"|"eu-west-1"|"us-west-1"|"us-west-2"|"ap-south-1"|"ap-southeast-1"|"ap-southeast-2"|"ap-northeast-1"|"sa-east-1"|"cn-north-1"|"eu-central-1")} locationConstraint
  */
 
 /**
