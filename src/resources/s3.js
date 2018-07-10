@@ -246,7 +246,6 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		const bucketName = bucket.metadata.name;
 		try {
 			const response = await this._headBucket(bucketName);
-			logger.error(`[${bucketName}]: Cannot update bucket: unsupported operation`);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
 			const {attributes: {ACL, createBucketConfiguration = {locationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
