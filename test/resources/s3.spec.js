@@ -48,7 +48,7 @@ describe('s3', function utilsTest() {
 			});
 			expect(attributes).to.be.deep.equal(expectedResult);
 		});
-		it('translates bucket-encryption fields', () => {
+		it('translates bucket-encryption fields (KMS)', () => {
 			const s3 = new S3Bucket();
 			const expectedResult = {
 				Bucket: 'TestBucket',
@@ -81,6 +81,77 @@ describe('s3', function utilsTest() {
 				}
 			});
 			expect(sseParams).to.be.deep.equal(expectedResult);
+		});
+		it('translates bucket-encryption fields (AES256)', () => {
+			const s3 = new S3Bucket();
+			const expectedResult = {
+				Bucket: 'TestBucket',
+				ServerSideEncryptionConfiguration: {
+					Rules: [
+						{
+							ApplyServerSideEncryptionByDefault: {
+								SSEAlgorithm: 'AES256',
+							},
+						},
+					],
+				},
+			};
+			const {sseParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [
+							{
+								serverSideEncryptionByDefault: {
+									sseAlgorithm: 'AES256',
+								},
+							},
+						],
+					},
+				}
+			});
+			expect(sseParams).to.be.deep.equal(expectedResult);
+		});
+		it('rejects bucket-encryption fields (AES256) with KMS master key', () => {
+			const s3 = new S3Bucket();
+			expect(() => s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [
+							{
+								serverSideEncryptionByDefault: {
+									kmsMasterKeyId: 'kmsMasterKeyId',
+									sseAlgorithm: 'AES256',
+								},
+							},
+						],
+					},
+				}
+			})).to.throw();
+		});
+		it('rejects bucket-encryption fields (unknown algorithm)', () => {
+			const s3 = new S3Bucket();
+			expect(() => s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [
+							{
+								serverSideEncryptionByDefault: {
+									sseAlgorithm: 'unknown',
+								},
+							},
+						],
+					},
+				}
+			})).to.throw();
 		});
 		it('returns null for missing bucket encryption', () => {
 			const s3 = new S3Bucket();

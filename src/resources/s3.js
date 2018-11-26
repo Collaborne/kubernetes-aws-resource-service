@@ -93,12 +93,28 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Determine the type of rule by looking at the keys in the rule
 			// We need to do a case-insensitive comparison here!
 			if (rule.serverSideEncryptionByDefault) {
-				return {
-					ApplyServerSideEncryptionByDefault: {
-						KMSMasterKeyId: rule.serverSideEncryptionByDefault.kmsMasterKeyId,
-						SSEAlgorithm: rule.serverSideEncryptionByDefault.sseAlgorithm,
-					},
-				};
+				switch (rule.serverSideEncryptionByDefault.sseAlgorithm) {
+				case 'AES256':
+					// Sanity check: This will otherwise produce errors when applying the configuration
+					if (rule.serverSideEncryptionByDefault.kmsMasterKeyId) {
+						throw new Error('Unexpected kmsMasterKeyId in AES256 SSE configuration');
+					}
+					return {
+						ApplyServerSideEncryptionByDefault: {
+							SSEAlgorithm: rule.serverSideEncryptionByDefault.sseAlgorithm,
+						},
+					};
+				case 'aws:kms':
+					return {
+						ApplyServerSideEncryptionByDefault: {
+							KMSMasterKeyId: rule.serverSideEncryptionByDefault.kmsMasterKeyId,
+							SSEAlgorithm: rule.serverSideEncryptionByDefault.sseAlgorithm,
+						},
+					};
+
+				default:
+					throw new Error(`Unsupported SSE algorithm ${rule.serverSideEncryptionByDefault.sseAlgorithm} for default encryption`);
+				}
 			}
 
 			throw new Error(`Unsupport SSE rule with keys: ${Object.keys(rule)}`);
