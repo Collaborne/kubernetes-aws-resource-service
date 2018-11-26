@@ -84,7 +84,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @param {BucketEncryption} bucketEncryption Bucket encryption (as per https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-bucketencryption.html)
 	 * @returns {Object} the parameters for `putBucketEncryption`, or `null`
 	 */
-	_translateServerSideEncryptionConfiguration(bucketName, bucketEncryption) {
+	_translateBucketEncryption(bucketName, bucketEncryption) {
 		if (!bucketEncryption || !bucketEncryption.serverSideEncryptionConfiguration) {
 			return null;
 		}
@@ -149,7 +149,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		return {
 			attributes,
 			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
-			sseParams: this._translateServerSideEncryptionConfiguration(bucket.metadata.name, bucketEncryption),
+			sseParams: this._translateBucketEncryption(bucket.metadata.name, bucketEncryption),
 		};
 	}
 
