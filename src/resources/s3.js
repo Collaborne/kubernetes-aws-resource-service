@@ -304,11 +304,11 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._createBucket(bucket.metadata.name, attributes);
 
 			// Apply all other operations
-			const operations = [this._putBucketLogging(bucket.metadata.name, loggingParams)];
+			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
+			await this._putBucketLogging(bucket.metadata.name, loggingParams);
 			if (sseParams) {
-				operations.push(this._putBucketEncryption(bucket.metadata.name, sseParams));
+				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
-			await Promise.all(operations);
 
 			return response;
 		} catch (err) {
@@ -355,11 +355,14 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			}
 
 			// - acl, logging, encryption: Overwrite it, letting AWS handle the problem of "update"
-			await Promise.all([
-				this._putBucketAcl(bucketName, {ACL}),
-				this._putBucketLogging(bucketName, loggingParams),
-				sseParams ? this._putBucketEncryption(bucket.metadata.name, sseParams) : this._deleteBucketEncryption(bucket.metadata.name),
-			]);
+			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
+			await this._putBucketAcl(bucketName, {ACL});
+			await this._putBucketLogging(bucketName, loggingParams);
+			if (sseParams) {
+				await this._putBucketEncryption(bucket.metadata.name, sseParams);
+			} else {
+				await this._deleteBucketEncryption(bucket.metadata.name);
+			}
 
 			return response;
 		} catch (err) {
