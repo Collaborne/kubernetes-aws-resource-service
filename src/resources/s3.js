@@ -21,6 +21,7 @@ const logger = require('log4js').getLogger('S3');
  * @property {("private"|"public-read"|"public-read-write"|"aws-exec-read"|"authenticated-read"|"bucket-owner-read"|"bucket-owner-full-control"|"log-delivery-write")} [acl] The canned ACL to apply to the bucket
  * @property {CreateBucketConfiguration} [createBucketConfiguration]
  * @property {LoggingConfiguration} [loggingConfiguration]
+ * @property {BucketEncryption} [bucketEncryption] optional configuration for SSE
  */
 
 /**
@@ -77,6 +78,46 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	/**
+	 * Translate the SSE configuration into the 'server-side encryption params' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {BucketEncryption} bucketEncryption Bucket encryption (as per https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-bucketencryption.html)
+	 * @returns {Object} the parameters for `putBucketEncryption`, or `null`
+	 */
+	_translateServerSideEncryptionConfiguration(bucketName, bucketEncryption) {
+		if (!bucketEncryption || !bucketEncryption.serverSideEncryptionConfiguration) {
+			return null;
+		}
+
+		const rules = bucketEncryption.serverSideEncryptionConfiguration.map(rule => {
+			// Determine the type of rule by looking at the keys in the rule
+			// We need to do a case-insensitive comparison here!
+			if (rule.serverSideEncryptionByDefault) {
+				return {
+					ApplyServerSideEncryptionByDefault: {
+						KMSMasterKeyId: rule.serverSideEncryptionByDefault.kmsMasterKeyId,
+						SSEAlgorithm: rule.serverSideEncryptionByDefault.sseAlgorithm,
+					},
+				};
+			}
+
+			throw new Error(`Unsupport SSE rule with keys: ${Object.keys(rule)}`);
+		});
+		if (rules.length === 0) {
+			// No rules: Assume no intent to configure default bucket encryption
+			// This is different from "invalid rule"!
+			return null;
+		}
+
+		return {
+			Bucket: bucketName,
+			ServerSideEncryptionConfiguration: {
+				Rules: rules,
+			},
+		};
+	}
+
+	/**
 	 * Convert the bucket.spec into parameters for the various AWS SDK operations.
 	 *
 	 * The resulting elements do not have the bucket name set.
@@ -86,7 +127,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	_translateSpec(bucket) {
 		// Split the spec into parts
-		const {loggingConfiguration, ...otherAttributes} = bucket.spec;
+		const {loggingConfiguration, bucketEncryption, ...otherAttributes} = bucket.spec;
 		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
@@ -107,7 +148,8 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}, {});
 		return {
 			attributes,
-			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration)
+			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
+			sseParams: this._translateServerSideEncryptionConfiguration(bucket.metadata.name, bucketEncryption),
 		};
 	}
 
@@ -161,6 +203,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _putBucketEncryption(bucketName, sseAttributes) {
+		if (sseAttributes.Bucket && sseAttributes.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${sseAttributes.Bucket}`);
+		}
+		const request = Object.assign({}, sseAttributes, {
+			Bucket: bucketName
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketEncryption', this.s3.putBucketEncryption, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure bucket encryption');
+		}
+	}
+
 	async _putBucketAcl(bucketName, aclAttributes) {
 		if (aclAttributes.Bucket && aclAttributes.Bucket !== bucketName) {
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
@@ -183,6 +239,17 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			return await this._retryOnTransientNetworkErrors('S3::DeleteBucket', this.s3.deleteBucket, [request]);
 		} catch (err) {
 			return this._reportError(bucketName, err, 'Cannot delete bucket');
+		}
+	}
+
+	async _deleteBucketEncryption(bucketName) {
+		const request = {
+			Bucket: bucketName
+		};
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::DeleteBucketEncryption', this.s3.deleteBucketEncryption, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot remove bucket encryption');
 		}
 	}
 
@@ -215,13 +282,17 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const {attributes, loggingParams} = this._translateSpec(bucket);
+		const {attributes, loggingParams, sseParams} = this._translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
 			const response = await this._createBucket(bucket.metadata.name, attributes);
 
 			// Apply all other operations
-			await this._putBucketLogging(bucket.metadata.name, loggingParams);
+			const operations = [this._putBucketLogging(bucket.metadata.name, loggingParams)];
+			if (sseParams) {
+				operations.push(this._putBucketEncryption(bucket.metadata.name, sseParams));
+			}
+			await Promise.all(operations);
 
 			return response;
 		} catch (err) {
@@ -260,16 +331,19 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams} = this._translateSpec(bucket);
+			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, sseParams} = this._translateSpec(bucket);
 			const bucketLocation = await this._getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
 				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
 				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
-			// - acl: Overwrite it, letting AWS handle the problem of "update"
-			await this._putBucketAcl(bucketName, {ACL});
-			await this._putBucketLogging(bucketName, loggingParams);
+			// - acl, logging, encryption: Overwrite it, letting AWS handle the problem of "update"
+			await Promise.all([
+				this._putBucketAcl(bucketName, {ACL}),
+				this._putBucketLogging(bucketName, loggingParams),
+				sseParams ? this._putBucketEncryption(bucket.metadata.name, sseParams) : this._deleteBucketEncryption(bucket.metadata.name),
+			]);
 
 			return response;
 		} catch (err) {

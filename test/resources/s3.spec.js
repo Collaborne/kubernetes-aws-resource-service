@@ -48,6 +48,89 @@ describe('s3', function utilsTest() {
 			});
 			expect(attributes).to.be.deep.equal(expectedResult);
 		});
+		it('translates bucket-encryption fields', () => {
+			const s3 = new S3Bucket();
+			const expectedResult = {
+				Bucket: 'TestBucket',
+				ServerSideEncryptionConfiguration: {
+					Rules: [
+						{
+							ApplyServerSideEncryptionByDefault: {
+								KMSMasterKeyId: 'kmsMasterKeyId',
+								SSEAlgorithm: 'aws:kms',
+							},
+						},
+					],
+				},
+			};
+			const {sseParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [
+							{
+								serverSideEncryptionByDefault: {
+									kmsMasterKeyId: 'kmsMasterKeyId',
+									sseAlgorithm: 'aws:kms',
+								},
+							},
+						],
+					},
+				}
+			});
+			expect(sseParams).to.be.deep.equal(expectedResult);
+		});
+		it('returns null for missing bucket encryption', () => {
+			const s3 = new S3Bucket();
+			const {sseParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {}
+			});
+			expect(sseParams).to.be.null;
+		});
+		it('returns null for empty bucket encryption', () => {
+			const s3 = new S3Bucket();
+			const {sseParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {},
+				},
+			});
+			expect(sseParams).to.be.null;
+		});
+		it('returns null for empty bucket SSE configuration', () => {
+			const s3 = new S3Bucket();
+			const {sseParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [],
+					},
+				},
+			});
+			expect(sseParams).to.be.null;
+		});
+		it('throws for invalid empty bucket SSE configuration rule', () => {
+			const s3 = new S3Bucket();
+			expect(() => s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					bucketEncryption: {
+						serverSideEncryptionConfiguration: [{}],
+					},
+				},
+			})).to.throw();
+		});
 	});
 	describe('create behavior', () => {
 		it('invokes update when the bucket exists for this account', async() => {
