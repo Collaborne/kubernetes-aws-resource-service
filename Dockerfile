@@ -1,4 +1,4 @@
-FROM node:carbon-alpine
+FROM node:dubnium-alpine
 
 # Configure the environment
 ENV NODE_ENV=production
