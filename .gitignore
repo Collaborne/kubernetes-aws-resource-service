@@ -11,4 +11,4 @@ yarn.lock
 *.porig
 
 /.nyc_output/
-
+/.vscode/
