@@ -78,6 +78,29 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	/**
+	 * Translate the logging configuration into the 'logging params' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {PublicAccessBlockConfiguration} publicAccessBlockConfiguration Public Access Block configuration
+	 * @returns {Object} the parameters for `putPublicAccessBlock`
+	 */
+	_translatePublicAccessBlockConfiguration(bucketName, publicAccessBlockConfiguration) {
+		let status;
+		if (!publicAccessBlockConfiguration) {
+			status = {};
+		} else {
+			status = {
+				BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
+			};
+		}
+
+		return {
+			Bucket: bucketName,
+			PublicAccessBlockConfiguration: status
+		};
+	}
+
+	/**
 	 * Translate the SSE configuration into the 'server-side encryption params' for the AWS SDK.
 	 *
 	 * @param {string} bucketName the bucket name
@@ -143,7 +166,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	_translateSpec(bucket) {
 		// Split the spec into parts
-		const {loggingConfiguration, bucketEncryption, ...otherAttributes} = bucket.spec;
+		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, ...otherAttributes} = bucket.spec;
 		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
@@ -165,6 +188,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		return {
 			attributes,
 			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
+			publicAccessBlockParams: this._translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
 			sseParams: this._translateBucketEncryption(bucket.metadata.name, bucketEncryption),
 		};
 	}
@@ -233,6 +257,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _putPublicAccessBlock(bucketName, publicAccessBlockParams) {
+		if (publicAccessBlockParams.Bucket && publicAccessBlockParams.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${publicAccessBlockParams.Bucket}`);
+		}
+		const request = Object.assign({}, publicAccessBlockParams, {
+			Bucket: bucketName,
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutPublicAccessBlock', this.s3.putPublicAccessBlock, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure Block Public Access for bucket');
+		}
+	}
+
 	async _putBucketAcl(bucketName, aclAttributes) {
 		if (aclAttributes.Bucket && aclAttributes.Bucket !== bucketName) {
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
@@ -298,7 +336,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const {attributes, loggingParams, sseParams} = this._translateSpec(bucket);
+		const {attributes, loggingParams, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
 			const response = await this._createBucket(bucket.metadata.name, attributes);
@@ -306,6 +344,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Apply all other operations
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketLogging(bucket.metadata.name, loggingParams);
+			await this._putPublicAccessBlock(bucket, publicAccessBlockParams);
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
@@ -347,17 +386,18 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, sseParams} = this._translateSpec(bucket);
+			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, sseParams, publicAccessBlockParams} = this._translateSpec(bucket);
 			const bucketLocation = await this._getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
 				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
 				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
-			// - acl, logging, encryption: Overwrite it, letting AWS handle the problem of "update"
+			// - acl, logging, Public Access Block, encryption: Overwrite it, letting AWS handle the problem of "update"
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketAcl(bucketName, {ACL});
 			await this._putBucketLogging(bucketName, loggingParams);
+			await this._putPublicAccessBlock(bucket, publicAccessBlockParams);
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			} else {

@@ -202,6 +202,26 @@ describe('s3', function utilsTest() {
 				},
 			})).to.throw();
 		});
+		it('translates Public Access Block configuration', () => {
+			const s3 = new S3Bucket();
+			const expectedResult = {
+				Bucket: 'TestBucket',
+				PublicAccessBlockConfiguration: {
+					BlockPublicAcls: true,
+				},
+			};
+			const { publicAccessBlockParams } = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					publicAccessBlockConfiguration: {
+						blockPublicAcls: true,
+					},
+				}
+			});
+			expect(publicAccessBlockParams).to.be.deep.equal(expectedResult);
+		});
 	});
 	describe('create behavior', () => {
 		it('invokes update when the bucket exists for this account', async() => {
