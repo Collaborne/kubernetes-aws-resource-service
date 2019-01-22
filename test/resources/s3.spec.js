@@ -210,7 +210,7 @@ describe('s3', function utilsTest() {
 					BlockPublicAcls: true,
 				},
 			};
-			const { publicAccessBlockParams } = s3._translateSpec({
+			const {publicAccessBlockParams} = s3._translateSpec({
 				metadata: {
 					name: 'TestBucket',
 				},
