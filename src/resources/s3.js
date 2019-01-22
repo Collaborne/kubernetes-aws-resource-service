@@ -85,18 +85,18 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @returns {Object} the parameters for `putPublicAccessBlock`
 	 */
 	_translatePublicAccessBlockConfiguration(bucketName, publicAccessBlockConfiguration) {
-		let status;
+		let configuration;
 		if (!publicAccessBlockConfiguration) {
-			status = {};
+			configuration = {};
 		} else {
-			status = {
+			configuration = {
 				BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
 			};
 		}
 
 		return {
 			Bucket: bucketName,
-			PublicAccessBlockConfiguration: status
+			PublicAccessBlockConfiguration: configuration
 		};
 	}
 
