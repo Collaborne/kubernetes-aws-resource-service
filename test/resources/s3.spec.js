@@ -208,6 +208,9 @@ describe('s3', function utilsTest() {
 				Bucket: 'TestBucket',
 				PublicAccessBlockConfiguration: {
 					BlockPublicAcls: true,
+					BlockPublicPolicy: true,
+					IgnorePublicAcls: true,
+					RestrictPublicBuckets: true,
 				},
 			};
 			const {publicAccessBlockParams} = s3._translateSpec({
@@ -217,6 +220,9 @@ describe('s3', function utilsTest() {
 				spec: {
 					publicAccessBlockConfiguration: {
 						blockPublicAcls: true,
+						blockPublicPolicy: true,
+						ignorePublicAcls: true,
+						restrictPublicBuckets: true,
 					},
 				}
 			});

@@ -91,6 +91,9 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		} else {
 			configuration = {
 				BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
+				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
+				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
+				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
 			};
 		}
 
