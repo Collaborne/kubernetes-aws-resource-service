@@ -40,6 +40,20 @@ const logger = require('log4js').getLogger('S3');
  */
 
 /**
+ * Configuration of Public Access Block.
+ *
+ * This structure is based on the definition in CloudFormation.
+ *
+ * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-publicaccessblockconfiguration.html
+ *
+ * @typedef PublicAccessBlockConfiguration
+ * @property {boolean} blockPublicAcls
+ * @property {boolean} blockPublicPolicy
+ * @property {boolean} ignorePublicAcls
+ * @property {boolean} restrictPublicBuckets
+ */
+
+/**
  * A adapter for modifying AWS S3 buckets using Bucket definitions
  */
 class S3Bucket { // eslint-disable-line padded-blocks
