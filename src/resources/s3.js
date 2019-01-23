@@ -361,7 +361,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Apply all other operations
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketLogging(bucket.metadata.name, loggingParams);
-			await this._putPublicAccessBlock(bucket, publicAccessBlockParams);
+			await this._putPublicAccessBlock(bucket.metadata.name, publicAccessBlockParams);
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
@@ -414,7 +414,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketAcl(bucketName, {ACL});
 			await this._putBucketLogging(bucketName, loggingParams);
-			await this._putPublicAccessBlock(bucket, publicAccessBlockParams);
+			await this._putPublicAccessBlock(bucketName, publicAccessBlockParams);
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			} else {
