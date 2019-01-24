@@ -228,6 +228,16 @@ describe('s3', function utilsTest() {
 			});
 			expect(publicAccessBlockParams).to.be.deep.equal(expectedResult);
 		});
+		it('returns null for missing Public Access Block configuration', () => {
+			const s3 = new S3Bucket();
+			const {publicAccessBlockParams} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {},
+			});
+			expect(publicAccessBlockParams).to.be.null;
+		});
 	});
 	describe('create behavior', () => {
 		it('invokes update when the bucket exists for this account', async() => {

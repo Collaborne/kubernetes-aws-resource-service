@@ -22,6 +22,7 @@ const logger = require('log4js').getLogger('S3');
  * @property {CreateBucketConfiguration} [createBucketConfiguration]
  * @property {LoggingConfiguration} [loggingConfiguration]
  * @property {BucketEncryption} [bucketEncryption] optional configuration for SSE
+ * @property {PublicAccessBlockConfiguration} [publicAccessBlockConfiguration] optional "Public Access Block" policy of the bucket
  */
 
 /**
@@ -96,24 +97,21 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 *
 	 * @param {string} bucketName the bucket name
 	 * @param {PublicAccessBlockConfiguration} publicAccessBlockConfiguration Public Access Block configuration
-	 * @returns {Object} the parameters for `putPublicAccessBlock`
+	 * @returns {Object} the parameters for `putPublicAccessBlock`, or `null`
 	 */
 	_translatePublicAccessBlockConfiguration(bucketName, publicAccessBlockConfiguration) {
-		let configuration;
 		if (!publicAccessBlockConfiguration) {
-			configuration = {};
-		} else {
-			configuration = {
-				BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
-				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
-				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
-				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
-			};
+			return null;
 		}
 
 		return {
 			Bucket: bucketName,
-			PublicAccessBlockConfiguration: configuration
+			PublicAccessBlockConfiguration: {
+				BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
+				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
+				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
+				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
+			}
 		};
 	}
 
@@ -324,6 +322,17 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _deletePublicAccessBlock(bucketName) {
+		const request = {
+			Bucket: bucketName
+		};
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::DeletePublicAccessBlock', this.s3.deletePublicAccessBlock, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot remove bucket encryption');
+		}
+	}
+
 	async _headBucket(bucketName) {
 		const request = {
 			Bucket: bucketName
@@ -361,7 +370,9 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Apply all other operations
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketLogging(bucket.metadata.name, loggingParams);
-			await this._putPublicAccessBlock(bucket.metadata.name, publicAccessBlockParams);
+			if (publicAccessBlockParams) {
+				await this._putPublicAccessBlock(bucket.metadata.name, publicAccessBlockParams);
+			}
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
@@ -414,7 +425,11 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketAcl(bucketName, {ACL});
 			await this._putBucketLogging(bucketName, loggingParams);
-			await this._putPublicAccessBlock(bucketName, publicAccessBlockParams);
+			if (publicAccessBlockParams) {
+				await this._putPublicAccessBlock(bucketName, publicAccessBlockParams);
+			} else {
+				await this._deletePublicAccessBlock(bucketName);
+			}
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			} else {
