@@ -1,6 +1,5 @@
 const AWS = require('aws-sdk');
 
-require('./kubernetes');
 const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('S3');
@@ -9,7 +8,7 @@ const logger = require('log4js').getLogger('S3');
  * A bucket resource in Kubernetes
  *
  * @typedef Bucket
- * @property {KubernetesMetadata} metadata
+ * @property {import("./kubernetes").KubernetesMetadata} metadata
  * @property {BucketSpec} spec
  * @property {BucketStatus} [status]
  */

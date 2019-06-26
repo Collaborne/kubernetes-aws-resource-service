@@ -7,3 +7,5 @@
  * @property {Object.<String,String>} [labels]
  * @property {Object.<String,String>} [metadata]
  */
+
+module.exports = {};

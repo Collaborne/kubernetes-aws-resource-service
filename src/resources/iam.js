@@ -2,14 +2,13 @@ const AWS = require('aws-sdk');
 
 const _ = require('lodash');
 
-require('./kubernetes');
 const {capitalize, capitalizeFieldNames, capitalizeFieldNamesForPath, delay, isTransientNetworkError, md5} = require('./utils');
 
 /**
  * A IAM Role
  *
  * @typedef Role
- * @property {KubernetesMetadata} metadata
+ * @property {import("./kubernetes").KubernetesMetadata} metadata
  * @property {RoleSpec} spec
  * @property {RoleStatus} [status]
  */

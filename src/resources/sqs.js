@@ -1,6 +1,5 @@
 const AWS = require('aws-sdk');
 
-require('./kubernetes');
 const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
@@ -9,7 +8,7 @@ const logger = require('log4js').getLogger('SQSQueue');
  * A queue resource in Kubernetes
  *
  * @typedef Queue
- * @property {KubernetesMetadata} metadata
+ * @property {import("./kubernetes").KubernetesMetadata} metadata
  * @property {QueueSpec} spec
  * @property {QueueStatus} [status]
  */
