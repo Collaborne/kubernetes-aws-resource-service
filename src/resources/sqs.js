@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
+const {capitalize, capitalizeFieldNames, delay, injectResourceArn, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('SQSQueue');
 
@@ -47,10 +47,7 @@ class SQSQueue { // eslint-disable-line padded-blocks
 		}
 
 		logger.debug(`[${queueName}]: Injecting resource ARN ${queueArn} into policy document`);
-		const newStatement = (policy.Statement || []).map(statement => Object.assign({Resource: queueArn}, statement));
-		return Object.assign({}, policy, {
-			Statement: newStatement
-		});
+		return injectResourceArn(policy, queueArn);
 	}
 
 	/**

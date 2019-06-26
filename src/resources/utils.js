@@ -64,11 +64,32 @@ function delay(after) {
 	});
 }
 
+/* eslint-disable valid-jsdoc */
+/**
+ * Inject the bucket ARN as 'Resource' into all statements of the policy
+ *
+ * @param {Object} policy a AWS policy
+ * @param {String} [resourceArn] a ARN to attempt to inject
+ * @return {Object} the policy, with the ARN injected if possible
+ */
+/* eslint-enable valid-jsdoc */
+function injectResourceArn(policy, resourceArn) {
+	if (!resourceArn) {
+		return policy;
+	}
+
+	const newStatement = (policy.Statement || []).map(statement => Object.assign({Resource: resourceArn}, statement));
+	return Object.assign({}, policy, {
+		Statement: newStatement,
+	});
+}
+
 module.exports = {
 	capitalize,
 	capitalizeFieldNames,
 	capitalizeFieldNamesForPath,
 	delay,
+	injectResourceArn,
 	isTransientNetworkError,
 	md5
 };

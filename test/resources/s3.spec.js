@@ -238,6 +238,74 @@ describe('s3', function utilsTest() {
 			});
 			expect(publicAccessBlockParams).to.be.null;
 		});
+		it('translates bucket policy', () => {
+			const s3 = new S3Bucket();
+			const expectedPolicy = {
+				Bucket: 'TestBucket',
+				ConfirmRemoveSelfBucketAccess: false,
+				Policy: '{"Statement":[]}',
+			};
+			const {policy} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					policy: {
+						statement: [],
+					},
+				},
+			});
+			expect(policy).to.be.deep.equals(expectedPolicy);
+		});
+		it('injects bucket ARN into policy statements', () => {
+			const s3 = new S3Bucket();
+			const expectedPolicy = {
+				Bucket: 'TestBucket',
+				ConfirmRemoveSelfBucketAccess: false,
+				Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow"}]}',
+			};
+			const {policy} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					policy: {
+						statement: [
+							{
+								action: '*',
+								effect: 'Allow',
+							},
+						],
+					},
+				},
+			});
+			expect(policy).to.be.deep.equals(expectedPolicy);
+		});
+		it('retains defined resources in policy statements', () => {
+			const s3 = new S3Bucket();
+			const expectedPolicy = {
+				Bucket: 'TestBucket',
+				ConfirmRemoveSelfBucketAccess: false,
+				Policy: '{"Statement":[{"Resource":"arn:something","Action":"*","Effect":"Allow"}]}',
+			};
+			const {policy} = s3._translateSpec({
+				metadata: {
+					name: 'TestBucket',
+				},
+				spec: {
+					policy: {
+						statement: [
+							{
+								action: '*',
+								effect: 'Allow',
+								resource: 'arn:something',
+							},
+						],
+					},
+				},
+			});
+			expect(policy).to.be.deep.equals(expectedPolicy);
+		});
 	});
 	describe('create behavior', () => {
 		it('invokes update when the bucket exists for this account', async() => {

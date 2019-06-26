@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 
-const {capitalize, capitalizeFieldNames, delay, isTransientNetworkError} = require('./utils');
+const {capitalize, capitalizeFieldNames, delay, injectResourceArn, isTransientNetworkError} = require('./utils');
 
 const logger = require('log4js').getLogger('S3');
 
@@ -22,6 +22,7 @@ const logger = require('log4js').getLogger('S3');
  * @property {LoggingConfiguration} [loggingConfiguration]
  * @property {BucketEncryption} [bucketEncryption] optional configuration for SSE
  * @property {PublicAccessBlockConfiguration} [publicAccessBlockConfiguration] optional "Public Access Block" policy of the bucket
+ * @property {import("./aws").Policy} [policy] optional bucket policy
  */
 
 /**
@@ -63,6 +64,23 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	constructor(options = {}) {
 		this.s3 = new AWS.S3(options);
+	}
+
+	/**
+	 * Inject the bucket ARN as 'Resource' into all statements of the policy
+	 *
+	 * @param {String} bucketName name of the bucket
+	 * @param {Object} policy a policy
+	 * @param {String} [bucketArn] a bucket ARN to attempt to inject
+	 * @return {Object} the policy, with the ARN injected if possible
+	 */
+	_injectBucketArn(bucketName, policy, bucketArn) {
+		if (!bucketArn) {
+			return policy;
+		}
+
+		logger.debug(`[${bucketName}]: Injecting resource ARN ${bucketArn} into policy document`);
+		return injectResourceArn(policy, bucketArn);
 	}
 
 	/**
@@ -170,6 +188,30 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		};
 	}
 
+	/* eslint-disable valid-jsdoc */
+	/**
+	 * Translate the policy into the 'put bucket policy params' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {import("./aws").Policy} bucketPolicy Bucket policy
+	 * @returns {import('aws-sdk/clients/s3').PutBucketPolicyRequest} the parameters for `putBucketPolicy`, or `null`
+	 */
+	/* eslint-enable valid-jsdoc */
+	_translatePolicy(bucketName, bucketPolicy) {
+		if (!bucketPolicy) {
+			return null;
+		}
+
+		const bucketArn = `arn:aws:s3:::${bucketName}`;
+		return {
+			Bucket: bucketName,
+
+			/* XXX: For now do not allow setting this value */
+			ConfirmRemoveSelfBucketAccess: false,
+			Policy: JSON.stringify(this._injectBucketArn(bucketName, capitalizeFieldNames(bucketPolicy), bucketArn), undefined, 0),
+		};
+	}
+
 	/**
 	 * Convert the bucket.spec into parameters for the various AWS SDK operations.
 	 *
@@ -180,7 +222,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	_translateSpec(bucket) {
 		// Split the spec into parts
-		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, ...otherAttributes} = bucket.spec;
+		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, policy, ...otherAttributes} = bucket.spec;
 		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
@@ -202,6 +244,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		return {
 			attributes,
 			loggingParams: this._translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
+			policy: this._translatePolicy(bucket.metadata.name, policy),
 			publicAccessBlockParams: this._translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
 			sseParams: this._translateBucketEncryption(bucket.metadata.name, bucketEncryption),
 		};
@@ -299,6 +342,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _putBucketPolicy(bucketName, policyAttributes) {
+		if (policyAttributes.Bucket && policyAttributes.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${policyAttributes.Bucket}`);
+		}
+		const request = Object.assign({}, policyAttributes, {
+			Bucket: bucketName
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketPolicy', this.s3.putBucketPolicy, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure bucket policy');
+		}
+	}
+
 	async _deleteBucket(bucketName) {
 		const request = {
 			Bucket: bucketName,
@@ -332,6 +389,17 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _deleteBucketPolicy(bucketName) {
+		const request = {
+			Bucket: bucketName,
+		};
+		try {
+			return await this._retryOnTransientNetworkErrors('S3:DeleteBucketPolicy', this.s3.deleteBucketPolicy, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot remove bucket policy');
+		}
+	}
+
 	async _headBucket(bucketName) {
 		const request = {
 			Bucket: bucketName,
@@ -361,13 +429,16 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const {attributes, loggingParams, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
+		const {attributes, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
 			const response = await this._createBucket(bucket.metadata.name, attributes);
 
 			// Apply all other operations
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
+			if (policy) {
+				await this._putBucketPolicy(bucket.metadata.name, policy);
+			}
 			await this._putBucketLogging(bucket.metadata.name, loggingParams);
 			if (publicAccessBlockParams) {
 				await this._putPublicAccessBlock(bucket.metadata.name, publicAccessBlockParams);
@@ -413,16 +484,21 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, sseParams, publicAccessBlockParams} = this._translateSpec(bucket);
+			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
 			const bucketLocation = await this._getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
 				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
 				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
-			// - acl, logging, Public Access Block, encryption: Overwrite it, letting AWS handle the problem of "update"
+			// - acl, logging, policy, Public Access Block, encryption: Overwrite it, letting AWS handle the problem of "update"
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations", which won't be retried.
 			await this._putBucketAcl(bucketName, {ACL});
+			if (policy) {
+				await this._putBucketPolicy(bucketName, policy);
+			} else {
+				await this._deleteBucketPolicy(bucketName);
+			}
 			await this._putBucketLogging(bucketName, loggingParams);
 			if (publicAccessBlockParams) {
 				await this._putPublicAccessBlock(bucketName, publicAccessBlockParams);
