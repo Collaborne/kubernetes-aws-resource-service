@@ -82,13 +82,13 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				LoggingEnabled: {
 					TargetBucket: loggingConfiguration.destinationBucketName,
 					TargetPrefix: loggingConfiguration.logFilePrefix,
-				}
+				},
 			};
 		}
 
 		return {
 			Bucket: bucketName,
-			BucketLoggingStatus: status
+			BucketLoggingStatus: status,
 		};
 	}
 
@@ -111,7 +111,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
 				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
 				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
-			}
+			},
 		};
 	}
 
@@ -235,7 +235,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${attributes.Bucket}`);
 		}
 		const request = Object.assign({}, attributes, {
-			Bucket: bucketName
+			Bucket: bucketName,
 		});
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::CreateBucket', this.s3.createBucket, [request]);
@@ -249,7 +249,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${loggingAttributes.Bucket}`);
 		}
 		const request = Object.assign({}, loggingAttributes, {
-			Bucket: bucketName
+			Bucket: bucketName,
 		});
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::PutBucketLogging', this.s3.putBucketLogging, [request]);
@@ -263,7 +263,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${sseAttributes.Bucket}`);
 		}
 		const request = Object.assign({}, sseAttributes, {
-			Bucket: bucketName
+			Bucket: bucketName,
 		});
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::PutBucketEncryption', this.s3.putBucketEncryption, [request]);
@@ -291,7 +291,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
 		}
 		const request = Object.assign({}, aclAttributes, {
-			Bucket: bucketName
+			Bucket: bucketName,
 		});
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::PutBucketAcl', this.s3.putBucketAcl, [request]);
@@ -302,7 +302,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 	async _deleteBucket(bucketName) {
 		const request = {
-			Bucket: bucketName
+			Bucket: bucketName,
 		};
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::DeleteBucket', this.s3.deleteBucket, [request]);
@@ -313,7 +313,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 	async _deleteBucketEncryption(bucketName) {
 		const request = {
-			Bucket: bucketName
+			Bucket: bucketName,
 		};
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::DeleteBucketEncryption', this.s3.deleteBucketEncryption, [request]);
@@ -324,7 +324,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 	async _deletePublicAccessBlock(bucketName) {
 		const request = {
-			Bucket: bucketName
+			Bucket: bucketName,
 		};
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::DeletePublicAccessBlock', this.s3.deletePublicAccessBlock, [request]);
@@ -335,7 +335,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 	async _headBucket(bucketName) {
 		const request = {
-			Bucket: bucketName
+			Bucket: bucketName,
 		};
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::HeadBucket', this.s3.headBucket, [request]);
@@ -346,7 +346,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 
 	async _getBucketLocation(bucketName) {
 		const request = {
-			Bucket: bucketName
+			Bucket: bucketName,
 		};
 		try {
 			return await this._retryOnTransientNetworkErrors('S3::GetBucketLocation', this.s3.getBucketLocation, [request]);
