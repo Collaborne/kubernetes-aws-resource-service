@@ -360,6 +360,20 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		}
 	}
 
+	async _putVersioningConfiguration(bucketName, versioningConfigurationParams) {
+		if (versioningConfigurationParams.Bucket && versioningConfigurationParams.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${versioningConfigurationParams.Bucket}`);
+		}
+		const request = Object.assign({}, versioningConfigurationParams, {
+			Bucket: bucketName,
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketVersioning', this.s3.putBucketVersioning, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure Versioning for bucket');
+		}
+	}
+
 	async _putBucketAcl(bucketName, aclAttributes) {
 		if (aclAttributes.Bucket && aclAttributes.Bucket !== bucketName) {
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
@@ -461,7 +475,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const {attributes, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
+		const {attributes, loggingParams, policy, publicAccessBlockParams, sseParams, versioningConfiguration} = this._translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
 			const response = await this._createBucket(bucket.metadata.name, attributes);
@@ -477,6 +491,9 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			}
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
+			}
+			if (versioningConfiguration) {
+				await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 			}
 
 			return response;
@@ -516,7 +533,14 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
+			const {
+				attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}},
+				loggingParams,
+				policy,
+				publicAccessBlockParams,
+				sseParams,
+				versioningConfiguration,
+			} = this._translateSpec(bucket);
 			const bucketLocation = await this._getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
 				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
@@ -541,6 +565,9 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			} else {
 				await this._deleteBucketEncryption(bucket.metadata.name);
+			}
+			if (versioningConfiguration) {
+				await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 			}
 
 			return response;
