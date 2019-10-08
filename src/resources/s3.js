@@ -55,6 +55,17 @@ const logger = require('log4js').getLogger('S3');
  */
 
 /**
+ * Configuration of VersioningConfiguration.
+ *
+ * This structure is based on the definition in CloudFormation.
+ *
+ * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-versioningconfig.html
+ *
+ * @typedef VersioningConfiguration
+ * @property {("Enabled"|"Suspended")} status
+ */
+
+/**
  * A adapter for modifying AWS S3 buckets using Bucket definitions
  */
 class S3Bucket { // eslint-disable-line padded-blocks
@@ -128,6 +139,26 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
 				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
 				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
+			},
+		};
+	}
+
+	/**
+	 * Translate the logging configuration into the 'versioning configuration' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {VersioningConfiguration} versioningConfiguration Public Access Block configuration
+	 * @returns {Object} the parameters for `versioningConfiguration`, or `null`
+	 */
+	_translateVersioningConfiguration(bucketName, versioningConfiguration) {
+		if (!versioningConfiguration) {
+			return null;
+		}
+
+		return {
+			Bucket: bucketName,
+			VersioningConfiguration: {
+				Status: versioningConfiguration.status,
 			},
 		};
 	}
@@ -222,7 +253,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	_translateSpec(bucket) {
 		// Split the spec into parts
-		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, policy, ...otherAttributes} = bucket.spec;
+		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, versioningConfiguration, policy, ...otherAttributes} = bucket.spec;
 		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
@@ -247,6 +278,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			policy: this._translatePolicy(bucket.metadata.name, policy),
 			publicAccessBlockParams: this._translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
 			sseParams: this._translateBucketEncryption(bucket.metadata.name, bucketEncryption),
+			versioningConfiguration: this._translateVersioningConfiguration(bucket.metadata.name, versioningConfiguration),
 		};
 	}
 
