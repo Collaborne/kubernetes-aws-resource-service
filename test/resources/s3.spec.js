@@ -48,290 +48,299 @@ describe('s3', function utilsTest() {
 			});
 			expect(attributes).to.be.deep.equal(expectedResult);
 		});
-		it('translates bucket-encryption fields (KMS)', () => {
-			const s3 = new S3Bucket();
-			const expectedResult = {
-				Bucket: 'TestBucket',
-				ServerSideEncryptionConfiguration: {
-					Rules: [
-						{
-							ApplyServerSideEncryptionByDefault: {
-								KMSMasterKeyId: 'kmsMasterKeyId',
-								SSEAlgorithm: 'aws:kms',
-							},
+
+		describe('Bucket policy', () => {
+			it('translates bucket policy', () => {
+				const s3 = new S3Bucket();
+				const expectedPolicy = {
+					Bucket: 'TestBucket',
+					ConfirmRemoveSelfBucketAccess: false,
+					Policy: '{"Statement":[]}',
+				};
+				const {policy} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						policy: {
+							statement: [],
 						},
-					],
-				},
-			};
-			const {sseParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [
-							{
-								serverSideEncryptionByDefault: {
-									kmsMasterKeyId: 'kmsMasterKeyId',
-									sseAlgorithm: 'aws:kms',
-								},
-							},
-						],
 					},
-				}
+				});
+				expect(policy).to.be.deep.equals(expectedPolicy);
 			});
-			expect(sseParams).to.be.deep.equal(expectedResult);
-		});
-		it('translates bucket-encryption fields (AES256)', () => {
-			const s3 = new S3Bucket();
-			const expectedResult = {
-				Bucket: 'TestBucket',
-				ServerSideEncryptionConfiguration: {
-					Rules: [
-						{
-							ApplyServerSideEncryptionByDefault: {
-								SSEAlgorithm: 'AES256',
-							},
+			it('injects bucket ARN into policy statements', () => {
+				const s3 = new S3Bucket();
+				const expectedPolicy = {
+					Bucket: 'TestBucket',
+					ConfirmRemoveSelfBucketAccess: false,
+					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow"}]}',
+				};
+				const {policy} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						policy: {
+							statement: [
+								{
+									action: '*',
+									effect: 'Allow',
+								},
+							],
 						},
-					],
-				},
-			};
-			const {sseParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [
+					},
+				});
+				expect(policy).to.be.deep.equals(expectedPolicy);
+			});
+			it('retains defined resources in policy statements', () => {
+				const s3 = new S3Bucket();
+				const expectedPolicy = {
+					Bucket: 'TestBucket',
+					ConfirmRemoveSelfBucketAccess: false,
+					Policy: '{"Statement":[{"Resource":"arn:something","Action":"*","Effect":"Allow"}]}',
+				};
+				const {policy} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						policy: {
+							statement: [
+								{
+									action: '*',
+									effect: 'Allow',
+									resource: 'arn:something',
+								},
+							],
+						},
+					},
+				});
+				expect(policy).to.be.deep.equals(expectedPolicy);
+			});
+			it('translates "AWS" principals', () => {
+				const s3 = new S3Bucket();
+				const expectedPolicy = {
+					Bucket: 'TestBucket',
+					ConfirmRemoveSelfBucketAccess: false,
+					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow","Principal":{"AWS":"principal"}}]}',
+				};
+				const {policy} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						policy: {
+							statement: [
+								{
+									action: '*',
+									effect: 'Allow',
+									principal: {
+										AWS: 'principal',
+									}
+								},
+							],
+						},
+					},
+				});
+				expect(policy).to.be.deep.equals(expectedPolicy);
+			});
+		});
+
+		describe('Bucket encryption', () => {
+			it('translates bucket-encryption fields (KMS)', () => {
+				const s3 = new S3Bucket();
+				const expectedResult = {
+					Bucket: 'TestBucket',
+					ServerSideEncryptionConfiguration: {
+						Rules: [
 							{
-								serverSideEncryptionByDefault: {
-									sseAlgorithm: 'AES256',
+								ApplyServerSideEncryptionByDefault: {
+									KMSMasterKeyId: 'kmsMasterKeyId',
+									SSEAlgorithm: 'aws:kms',
 								},
 							},
 						],
 					},
-				}
+				};
+				const {sseParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [
+								{
+									serverSideEncryptionByDefault: {
+										kmsMasterKeyId: 'kmsMasterKeyId',
+										sseAlgorithm: 'aws:kms',
+									},
+								},
+							],
+						},
+					}
+				});
+				expect(sseParams).to.be.deep.equal(expectedResult);
 			});
-			expect(sseParams).to.be.deep.equal(expectedResult);
-		});
-		it('rejects bucket-encryption fields (AES256) with KMS master key', () => {
-			const s3 = new S3Bucket();
-			expect(() => s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [
+			it('translates bucket-encryption fields (AES256)', () => {
+				const s3 = new S3Bucket();
+				const expectedResult = {
+					Bucket: 'TestBucket',
+					ServerSideEncryptionConfiguration: {
+						Rules: [
 							{
-								serverSideEncryptionByDefault: {
-									kmsMasterKeyId: 'kmsMasterKeyId',
-									sseAlgorithm: 'AES256',
+								ApplyServerSideEncryptionByDefault: {
+									SSEAlgorithm: 'AES256',
 								},
 							},
 						],
 					},
-				}
-			})).to.throw();
-		});
-		it('rejects bucket-encryption fields (unknown algorithm)', () => {
-			const s3 = new S3Bucket();
-			expect(() => s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [
-							{
-								serverSideEncryptionByDefault: {
-									sseAlgorithm: 'unknown',
+				};
+				const {sseParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [
+								{
+									serverSideEncryptionByDefault: {
+										sseAlgorithm: 'AES256',
+									},
 								},
-							},
-						],
+							],
+						},
+					}
+				});
+				expect(sseParams).to.be.deep.equal(expectedResult);
+			});
+			it('rejects bucket-encryption fields (AES256) with KMS master key', () => {
+				const s3 = new S3Bucket();
+				expect(() => s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				}
-			})).to.throw();
-		});
-		it('returns null for missing bucket encryption', () => {
-			const s3 = new S3Bucket();
-			const {sseParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {}
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [
+								{
+									serverSideEncryptionByDefault: {
+										kmsMasterKeyId: 'kmsMasterKeyId',
+										sseAlgorithm: 'AES256',
+									},
+								},
+							],
+						},
+					}
+				})).to.throw();
 			});
-			expect(sseParams).to.be.null;
-		});
-		it('returns null for empty bucket encryption', () => {
-			const s3 = new S3Bucket();
-			const {sseParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {},
-				},
-			});
-			expect(sseParams).to.be.null;
-		});
-		it('returns null for empty bucket SSE configuration', () => {
-			const s3 = new S3Bucket();
-			const {sseParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [],
+			it('rejects bucket-encryption fields (unknown algorithm)', () => {
+				const s3 = new S3Bucket();
+				expect(() => s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				},
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [
+								{
+									serverSideEncryptionByDefault: {
+										sseAlgorithm: 'unknown',
+									},
+								},
+							],
+						},
+					}
+				})).to.throw();
 			});
-			expect(sseParams).to.be.null;
-		});
-		it('throws for invalid empty bucket SSE configuration rule', () => {
-			const s3 = new S3Bucket();
-			expect(() => s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					bucketEncryption: {
-						serverSideEncryptionConfiguration: [{}],
+			it('returns null for missing bucket encryption', () => {
+				const s3 = new S3Bucket();
+				const {sseParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				},
-			})).to.throw();
-		});
-		it('translates Public Access Block configuration', () => {
-			const s3 = new S3Bucket();
-			const expectedResult = {
-				Bucket: 'TestBucket',
-				PublicAccessBlockConfiguration: {
-					BlockPublicAcls: true,
-					BlockPublicPolicy: true,
-					IgnorePublicAcls: true,
-					RestrictPublicBuckets: true,
-				},
-			};
-			const {publicAccessBlockParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					publicAccessBlockConfiguration: {
-						blockPublicAcls: true,
-						blockPublicPolicy: true,
-						ignorePublicAcls: true,
-						restrictPublicBuckets: true,
+					spec: {}
+				});
+				expect(sseParams).to.be.null;
+			});
+			it('returns null for empty bucket encryption', () => {
+				const s3 = new S3Bucket();
+				const {sseParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				}
-			});
-			expect(publicAccessBlockParams).to.be.deep.equal(expectedResult);
-		});
-		it('returns null for missing Public Access Block configuration', () => {
-			const s3 = new S3Bucket();
-			const {publicAccessBlockParams} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {},
-			});
-			expect(publicAccessBlockParams).to.be.null;
-		});
-		it('translates bucket policy', () => {
-			const s3 = new S3Bucket();
-			const expectedPolicy = {
-				Bucket: 'TestBucket',
-				ConfirmRemoveSelfBucketAccess: false,
-				Policy: '{"Statement":[]}',
-			};
-			const {policy} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					policy: {
-						statement: [],
+					spec: {
+						bucketEncryption: {},
 					},
-				},
+				});
+				expect(sseParams).to.be.null;
 			});
-			expect(policy).to.be.deep.equals(expectedPolicy);
-		});
-		it('injects bucket ARN into policy statements', () => {
-			const s3 = new S3Bucket();
-			const expectedPolicy = {
-				Bucket: 'TestBucket',
-				ConfirmRemoveSelfBucketAccess: false,
-				Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow"}]}',
-			};
-			const {policy} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					policy: {
-						statement: [
-							{
-								action: '*',
-								effect: 'Allow',
-							},
-						],
+			it('returns null for empty bucket SSE configuration', () => {
+				const s3 = new S3Bucket();
+				const {sseParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				},
-			});
-			expect(policy).to.be.deep.equals(expectedPolicy);
-		});
-		it('retains defined resources in policy statements', () => {
-			const s3 = new S3Bucket();
-			const expectedPolicy = {
-				Bucket: 'TestBucket',
-				ConfirmRemoveSelfBucketAccess: false,
-				Policy: '{"Statement":[{"Resource":"arn:something","Action":"*","Effect":"Allow"}]}',
-			};
-			const {policy} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					policy: {
-						statement: [
-							{
-								action: '*',
-								effect: 'Allow',
-								resource: 'arn:something',
-							},
-						],
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [],
+						},
 					},
-				},
+				});
+				expect(sseParams).to.be.null;
 			});
-			expect(policy).to.be.deep.equals(expectedPolicy);
-		});
-		it('translates "AWS" principals', () => {
-			const s3 = new S3Bucket();
-			const expectedPolicy = {
-				Bucket: 'TestBucket',
-				ConfirmRemoveSelfBucketAccess: false,
-				Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow","Principal":{"AWS":"principal"}}]}',
-			};
-			const {policy} = s3._translateSpec({
-				metadata: {
-					name: 'TestBucket',
-				},
-				spec: {
-					policy: {
-						statement: [
-							{
-								action: '*',
-								effect: 'Allow',
-								principal: {
-									AWS: 'principal',
-								}
-							},
-						],
+			it('throws for invalid empty bucket SSE configuration rule', () => {
+				const s3 = new S3Bucket();
+				expect(() => s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
 					},
-				},
+					spec: {
+						bucketEncryption: {
+							serverSideEncryptionConfiguration: [{}],
+						},
+					},
+				})).to.throw();
 			});
-			expect(policy).to.be.deep.equals(expectedPolicy);
+		});
+
+		describe('Public Access Block', () => {
+			it('translates Public Access Block configuration', () => {
+				const s3 = new S3Bucket();
+				const expectedResult = {
+					Bucket: 'TestBucket',
+					PublicAccessBlockConfiguration: {
+						BlockPublicAcls: true,
+						BlockPublicPolicy: true,
+						IgnorePublicAcls: true,
+						RestrictPublicBuckets: true,
+					},
+				};
+				const {publicAccessBlockParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						publicAccessBlockConfiguration: {
+							blockPublicAcls: true,
+							blockPublicPolicy: true,
+							ignorePublicAcls: true,
+							restrictPublicBuckets: true,
+						},
+					}
+				});
+				expect(publicAccessBlockParams).to.be.deep.equal(expectedResult);
+			});
+			it('returns null for missing Public Access Block configuration', () => {
+				const s3 = new S3Bucket();
+				const {publicAccessBlockParams} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {},
+				});
+				expect(publicAccessBlockParams).to.be.null;
+			});
 		});
 	});
 	describe('create behavior', () => {
