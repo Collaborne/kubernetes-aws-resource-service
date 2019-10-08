@@ -375,6 +375,39 @@ describe('s3', function utilsTest() {
 				expect(versioningConfiguration).to.be.null;
 			});
 		});
+
+		describe('Versioning Configuration', () => {
+			it('translates Versioning configuration', () => {
+				const s3 = new S3Bucket();
+				const expectedResult = {
+					Bucket: 'TestBucket',
+					VersioningConfiguration: {
+						Status: 'Enabled',
+					},
+				};
+				const {versioningConfiguration} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						versioningConfiguration: {
+							status: 'Enabled',
+						},
+					}
+				});
+				expect(versioningConfiguration).to.be.deep.equal(expectedResult);
+			});
+			it('returns null for missing Versioning configuration', () => {
+				const s3 = new S3Bucket();
+				const {versioningConfiguration} = s3._translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {},
+				});
+				expect(versioningConfiguration).to.be.null;
+			});
+		});
 	});
 	describe('create behavior', () => {
 		it('invokes update when the bucket exists for this account', async() => {
