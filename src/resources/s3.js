@@ -361,10 +361,36 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	}
 
 	async _putVersioningConfiguration(bucketName, versioningConfigurationParams) {
-		if (versioningConfigurationParams.Bucket && versioningConfigurationParams.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${versioningConfigurationParams.Bucket}`);
+		// S3 buckets can have the state: Enabled/Suspended/nothing (the later happens
+		// when versioning was never set)
+		// We don't want to set versioning if it's not in S3. If versioning was formerly
+		// set in S3: it should be suspended if the config isn't set in our config.
+		let versioningConfiguration;
+		if (!versioningConfigurationParams) {
+			const currentStatusRequest = Object.assign({}, versioningConfigurationParams, {
+				Bucket: bucketName,
+			});
+			const currentStatusRespose = await this._retryOnTransientNetworkErrors('S3::GetBucketVersioning', this.s3.getBucketVersioning, [currentStatusRequest]);
+			if (!currentStatusRespose.Status) {
+				// Not having versioning configuration for a bucket that was never configured is fine
+				return Promise.resolve();
+			}
+
+			versioningConfiguration = {
+				Bucket: bucketName,
+				VersioningConfiguration: {
+					Status: 'Suspended',
+				},
+			};
+		} else {
+			if (versioningConfigurationParams.Bucket && versioningConfigurationParams.Bucket !== bucketName) {
+				throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${versioningConfigurationParams.Bucket}`);
+			}
+
+			versioningConfiguration = versioningConfigurationParams;
 		}
-		const request = Object.assign({}, versioningConfigurationParams, {
+
+		const request = Object.assign({}, versioningConfiguration, {
 			Bucket: bucketName,
 		});
 		try {
