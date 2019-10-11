@@ -55,6 +55,17 @@ const logger = require('log4js').getLogger('S3');
  */
 
 /**
+ * Configuration of VersioningConfiguration.
+ *
+ * This structure is based on the definition in CloudFormation.
+ *
+ * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-versioningconfig.html
+ *
+ * @typedef VersioningConfiguration
+ * @property {("Enabled"|"Suspended")} status
+ */
+
+/**
  * A adapter for modifying AWS S3 buckets using Bucket definitions
  */
 class S3Bucket { // eslint-disable-line padded-blocks
@@ -128,6 +139,26 @@ class S3Bucket { // eslint-disable-line padded-blocks
 				BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
 				IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
 				RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
+			},
+		};
+	}
+
+	/**
+	 * Translate the logging configuration into the 'versioning configuration' for the AWS SDK.
+	 *
+	 * @param {string} bucketName the bucket name
+	 * @param {VersioningConfiguration} versioningConfiguration Public Access Block configuration
+	 * @returns {Object} the parameters for `versioningConfiguration`, or `null`
+	 */
+	_translateVersioningConfiguration(bucketName, versioningConfiguration) {
+		if (!versioningConfiguration) {
+			return null;
+		}
+
+		return {
+			Bucket: bucketName,
+			VersioningConfiguration: {
+				Status: versioningConfiguration.status,
 			},
 		};
 	}
@@ -222,7 +253,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 */
 	_translateSpec(bucket) {
 		// Split the spec into parts
-		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, policy, ...otherAttributes} = bucket.spec;
+		const {loggingConfiguration, bucketEncryption, publicAccessBlockConfiguration, versioningConfiguration, policy, ...otherAttributes} = bucket.spec;
 		const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 			const value = bucket.spec[key];
 			let resultKey;
@@ -247,6 +278,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			policy: this._translatePolicy(bucket.metadata.name, policy),
 			publicAccessBlockParams: this._translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
 			sseParams: this._translateBucketEncryption(bucket.metadata.name, bucketEncryption),
+			versioningConfiguration: this._translateVersioningConfiguration(bucket.metadata.name, versioningConfiguration),
 		};
 	}
 
@@ -325,6 +357,44 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			return await this._retryOnTransientNetworkErrors('S3::PutPublicAccessBlock', this.s3.putPublicAccessBlock, [request]);
 		} catch (err) {
 			return this._reportError(bucketName, err, 'Cannot configure Block Public Access for bucket');
+		}
+	}
+
+	async _putVersioningConfiguration(bucketName, versioningConfigurationParams) {
+		// S3 buckets can have the state: Enabled/Suspended/nothing (the later happens
+		// when versioning was never set)
+		// We don't want to set versioning if it's not in S3. If versioning was formerly
+		// set in S3: it should be suspended if the config isn't set in our config.
+		let versioningConfiguration;
+		if (!versioningConfigurationParams) {
+			const currentStatusRequest = {Bucket: bucketName};
+			const currentStatusRespose = await this._retryOnTransientNetworkErrors('S3::GetBucketVersioning', this.s3.getBucketVersioning, [currentStatusRequest]);
+			if (!currentStatusRespose.Status) {
+				// Not having versioning configuration for a bucket that was never configured is fine
+				return Promise.resolve();
+			}
+
+			versioningConfiguration = {
+				Bucket: bucketName,
+				VersioningConfiguration: {
+					Status: 'Suspended',
+				},
+			};
+		} else {
+			if (versioningConfigurationParams.Bucket && versioningConfigurationParams.Bucket !== bucketName) {
+				throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${versioningConfigurationParams.Bucket}`);
+			}
+
+			versioningConfiguration = versioningConfigurationParams;
+		}
+
+		const request = Object.assign({}, versioningConfiguration, {
+			Bucket: bucketName,
+		});
+		try {
+			return await this._retryOnTransientNetworkErrors('S3::PutBucketVersioning', this.s3.putBucketVersioning, [request]);
+		} catch (err) {
+			return this._reportError(bucketName, err, 'Cannot configure Versioning for bucket');
 		}
 	}
 
@@ -429,7 +499,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 	 * @return {Promise<any>} promise that resolves when the bucket is created
 	 */
 	async create(bucket) {
-		const {attributes, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
+		const {attributes, loggingParams, policy, publicAccessBlockParams, sseParams, versioningConfiguration} = this._translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
 			const response = await this._createBucket(bucket.metadata.name, attributes);
@@ -446,6 +516,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
+			await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 
 			return response;
 		} catch (err) {
@@ -484,7 +555,14 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			const response = await this._headBucket(bucketName);
 
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
-			const {attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}}, loggingParams, policy, publicAccessBlockParams, sseParams} = this._translateSpec(bucket);
+			const {
+				attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}},
+				loggingParams,
+				policy,
+				publicAccessBlockParams,
+				sseParams,
+				versioningConfiguration,
+			} = this._translateSpec(bucket);
 			const bucketLocation = await this._getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
 				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
@@ -510,6 +588,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			} else {
 				await this._deleteBucketEncryption(bucket.metadata.name);
 			}
+			await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 
 			return response;
 		} catch (err) {
