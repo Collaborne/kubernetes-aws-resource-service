@@ -516,9 +516,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			if (sseParams) {
 				await this._putBucketEncryption(bucket.metadata.name, sseParams);
 			}
-			if (versioningConfiguration) {
-				await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
-			}
+			await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 
 			return response;
 		} catch (err) {
@@ -590,9 +588,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 			} else {
 				await this._deleteBucketEncryption(bucket.metadata.name);
 			}
-			if (versioningConfiguration) {
-				await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
-			}
+			await this._putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
 
 			return response;
 		} catch (err) {
