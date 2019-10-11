@@ -367,9 +367,7 @@ class S3Bucket { // eslint-disable-line padded-blocks
 		// set in S3: it should be suspended if the config isn't set in our config.
 		let versioningConfiguration;
 		if (!versioningConfigurationParams) {
-			const currentStatusRequest = Object.assign({}, versioningConfigurationParams, {
-				Bucket: bucketName,
-			});
+			const currentStatusRequest = {Bucket: bucketName};
 			const currentStatusRespose = await this._retryOnTransientNetworkErrors('S3::GetBucketVersioning', this.s3.getBucketVersioning, [currentStatusRequest]);
 			if (!currentStatusRespose.Status) {
 				// Not having versioning configuration for a bucket that was never configured is fine
