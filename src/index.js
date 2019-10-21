@@ -39,7 +39,7 @@ const argv = yargs
 function createK8sConfig(args) {
 	function createK8sConfigWithServer({server, insecureSkipTlsVerify, certificateAuthority, token, username, password, clientCertificate, clientKey}) {
 		const k8sConfig = {
-			insecureSkipTlsVerify: insecureSkipTlsVerify,
+			rejectUnauthorized: insecureSkipTlsVerify,
 			url: server,
 		};
 		if (certificateAuthority) {
