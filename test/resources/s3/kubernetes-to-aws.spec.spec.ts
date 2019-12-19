@@ -1,63 +1,65 @@
-const chai = require('chai');
-const expect = chai.expect;
+import { expect } from 'chai';
+import 'mocha';
 
-const S3Bucket = require('../../src/resources/s3');
+import { S3Client } from '../../../src/resources/s3/aws';
+import { KubernetesBucket } from '../../../src/resources/s3/kubernetes-config';
+import { translateSpec } from '../../../src/resources/s3/kubernetes-to-aws';
+import { S3Bucket } from '../../../src/resources/s3/s3';
+
+// tslint:disable max-classes-per-file
 
 describe('s3', function utilsTest() {
-	describe('_translateSpec behavior', () => {
+	describe('translateSpec behavior', () => {
 		it('uppercase the acl field', () => {
-			const s3 = new S3Bucket();
-			const {attributes} = s3._translateSpec({
+			const {attributes} = translateSpec({
 				metadata: {
 					name: 'TestBucket',
 				},
 				spec: {
-					acl: 'public-read'
-				}
+					acl: 'public-read',
+				},
 			});
 			expect(attributes.ACL).to.be.equal('public-read');
 		});
 		it('translates all fields', () => {
-			const s3 = new S3Bucket();
 			const expectedResult = {
 				ACL: 'private',
 				CreateBucketConfiguration: {
-					LocationConstraint: 'EU'
+					LocationConstraint: 'EU',
 				},
 				GrantFullControl: 'grantFullControl',
 				GrantRead: 'grantRead',
 				GrantReadACP: 'grantReadACP',
 				GrantWrite: 'grantWrite',
-				GrantWriteACP: 'grantWriteACP'
+				GrantWriteACP: 'grantWriteACP',
 			};
-			const {attributes} = s3._translateSpec({
+			const {attributes} = translateSpec({
 				metadata: {
 					name: 'TestBucket',
 				},
 				spec: {
 					acl: 'private',
 					createBucketConfiguration: {
-						locationConstraint: 'EU'
+						locationConstraint: 'EU',
 					},
 					grantFullControl: 'grantFullControl',
 					grantRead: 'grantRead',
 					grantReadACP: 'grantReadACP',
 					grantWrite: 'grantWrite',
-					grantWriteACP: 'grantWriteACP'
-				}
+					grantWriteACP: 'grantWriteACP',
+				},
 			});
 			expect(attributes).to.be.deep.equal(expectedResult);
 		});
 
 		describe('Bucket policy', () => {
 			it('translates bucket policy', () => {
-				const s3 = new S3Bucket();
 				const expectedPolicy = {
 					Bucket: 'TestBucket',
 					ConfirmRemoveSelfBucketAccess: false,
 					Policy: '{"Statement":[]}',
 				};
-				const {policy} = s3._translateSpec({
+				const {policy} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -70,13 +72,12 @@ describe('s3', function utilsTest() {
 				expect(policy).to.be.deep.equals(expectedPolicy);
 			});
 			it('injects bucket ARN into policy statements', () => {
-				const s3 = new S3Bucket();
 				const expectedPolicy = {
 					Bucket: 'TestBucket',
 					ConfirmRemoveSelfBucketAccess: false,
 					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow"}]}',
 				};
-				const {policy} = s3._translateSpec({
+				const {policy} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -94,13 +95,12 @@ describe('s3', function utilsTest() {
 				expect(policy).to.be.deep.equals(expectedPolicy);
 			});
 			it('retains defined resources in policy statements', () => {
-				const s3 = new S3Bucket();
 				const expectedPolicy = {
 					Bucket: 'TestBucket',
 					ConfirmRemoveSelfBucketAccess: false,
 					Policy: '{"Statement":[{"Resource":"arn:something","Action":"*","Effect":"Allow"}]}',
 				};
-				const {policy} = s3._translateSpec({
+				const {policy} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -119,13 +119,12 @@ describe('s3', function utilsTest() {
 				expect(policy).to.be.deep.equals(expectedPolicy);
 			});
 			it('translates "AWS" principals', () => {
-				const s3 = new S3Bucket();
 				const expectedPolicy = {
 					Bucket: 'TestBucket',
 					ConfirmRemoveSelfBucketAccess: false,
 					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow","Principal":{"AWS":"principal"}}]}',
 				};
-				const {policy} = s3._translateSpec({
+				const {policy} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -137,7 +136,7 @@ describe('s3', function utilsTest() {
 									effect: 'Allow',
 									principal: {
 										AWS: 'principal',
-									}
+									},
 								},
 							],
 						},
@@ -149,7 +148,6 @@ describe('s3', function utilsTest() {
 
 		describe('Bucket encryption', () => {
 			it('translates bucket-encryption fields (KMS)', () => {
-				const s3 = new S3Bucket();
 				const expectedResult = {
 					Bucket: 'TestBucket',
 					ServerSideEncryptionConfiguration: {
@@ -163,7 +161,7 @@ describe('s3', function utilsTest() {
 						],
 					},
 				};
-				const {sseParams} = s3._translateSpec({
+				const {sseParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -178,12 +176,11 @@ describe('s3', function utilsTest() {
 								},
 							],
 						},
-					}
+					},
 				});
 				expect(sseParams).to.be.deep.equal(expectedResult);
 			});
 			it('translates bucket-encryption fields (AES256)', () => {
-				const s3 = new S3Bucket();
 				const expectedResult = {
 					Bucket: 'TestBucket',
 					ServerSideEncryptionConfiguration: {
@@ -196,7 +193,7 @@ describe('s3', function utilsTest() {
 						],
 					},
 				};
-				const {sseParams} = s3._translateSpec({
+				const {sseParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -210,13 +207,12 @@ describe('s3', function utilsTest() {
 								},
 							],
 						},
-					}
+					},
 				});
 				expect(sseParams).to.be.deep.equal(expectedResult);
 			});
 			it('rejects bucket-encryption fields (AES256) with KMS master key', () => {
-				const s3 = new S3Bucket();
-				expect(() => s3._translateSpec({
+				expect(() => translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -231,12 +227,11 @@ describe('s3', function utilsTest() {
 								},
 							],
 						},
-					}
+					},
 				})).to.throw();
 			});
 			it('rejects bucket-encryption fields (unknown algorithm)', () => {
-				const s3 = new S3Bucket();
-				expect(() => s3._translateSpec({
+				expect(() => translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -245,27 +240,25 @@ describe('s3', function utilsTest() {
 							serverSideEncryptionConfiguration: [
 								{
 									serverSideEncryptionByDefault: {
-										sseAlgorithm: 'unknown',
+										sseAlgorithm: 'unknown' as any,
 									},
 								},
 							],
 						},
-					}
+					},
 				})).to.throw();
 			});
 			it('returns null for missing bucket encryption', () => {
-				const s3 = new S3Bucket();
-				const {sseParams} = s3._translateSpec({
+				const {sseParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
-					spec: {}
+					spec: {},
 				});
 				expect(sseParams).to.be.null;
 			});
 			it('returns null for empty bucket encryption', () => {
-				const s3 = new S3Bucket();
-				const {sseParams} = s3._translateSpec({
+				const {sseParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -276,8 +269,7 @@ describe('s3', function utilsTest() {
 				expect(sseParams).to.be.null;
 			});
 			it('returns null for empty bucket SSE configuration', () => {
-				const s3 = new S3Bucket();
-				const {sseParams} = s3._translateSpec({
+				const {sseParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -290,14 +282,15 @@ describe('s3', function utilsTest() {
 				expect(sseParams).to.be.null;
 			});
 			it('throws for invalid empty bucket SSE configuration rule', () => {
-				const s3 = new S3Bucket();
-				expect(() => s3._translateSpec({
+				expect(() => translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
 					spec: {
 						bucketEncryption: {
-							serverSideEncryptionConfiguration: [{}],
+							serverSideEncryptionConfiguration: [
+								{} as any,
+							],
 						},
 					},
 				})).to.throw();
@@ -306,7 +299,6 @@ describe('s3', function utilsTest() {
 
 		describe('Public Access Block', () => {
 			it('translates Public Access Block configuration', () => {
-				const s3 = new S3Bucket();
 				const expectedResult = {
 					Bucket: 'TestBucket',
 					PublicAccessBlockConfiguration: {
@@ -316,7 +308,7 @@ describe('s3', function utilsTest() {
 						RestrictPublicBuckets: true,
 					},
 				};
-				const {publicAccessBlockParams} = s3._translateSpec({
+				const {publicAccessBlockParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -327,13 +319,12 @@ describe('s3', function utilsTest() {
 							ignorePublicAcls: true,
 							restrictPublicBuckets: true,
 						},
-					}
+					},
 				});
 				expect(publicAccessBlockParams).to.be.deep.equal(expectedResult);
 			});
 			it('returns null for missing Public Access Block configuration', () => {
-				const s3 = new S3Bucket();
-				const {publicAccessBlockParams} = s3._translateSpec({
+				const {publicAccessBlockParams} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -345,14 +336,13 @@ describe('s3', function utilsTest() {
 
 		describe('Versioning Configuration', () => {
 			it('translates Versioning configuration', () => {
-				const s3 = new S3Bucket();
 				const expectedResult = {
 					Bucket: 'TestBucket',
 					VersioningConfiguration: {
 						Status: 'Enabled',
 					},
 				};
-				const {versioningConfiguration} = s3._translateSpec({
+				const {versioningConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -360,13 +350,12 @@ describe('s3', function utilsTest() {
 						versioningConfiguration: {
 							status: 'Enabled',
 						},
-					}
+					},
 				});
 				expect(versioningConfiguration).to.be.deep.equal(expectedResult);
 			});
 			it('returns null for missing Versioning configuration', () => {
-				const s3 = new S3Bucket();
-				const {versioningConfiguration} = s3._translateSpec({
+				const {versioningConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -378,14 +367,13 @@ describe('s3', function utilsTest() {
 
 		describe('Versioning Configuration', () => {
 			it('translates Versioning configuration', () => {
-				const s3 = new S3Bucket();
 				const expectedResult = {
 					Bucket: 'TestBucket',
 					VersioningConfiguration: {
 						Status: 'Enabled',
 					},
 				};
-				const {versioningConfiguration} = s3._translateSpec({
+				const {versioningConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -393,13 +381,12 @@ describe('s3', function utilsTest() {
 						versioningConfiguration: {
 							status: 'Enabled',
 						},
-					}
+					},
 				});
 				expect(versioningConfiguration).to.be.deep.equal(expectedResult);
 			});
 			it('returns null for missing Versioning configuration', () => {
-				const s3 = new S3Bucket();
-				const {versioningConfiguration} = s3._translateSpec({
+				const {versioningConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -410,13 +397,15 @@ describe('s3', function utilsTest() {
 		});
 	});
 	describe('create behavior', () => {
-		it('invokes update when the bucket exists for this account', async() => {
+		it('invokes update when the bucket exists for this account', async () => {
 			class TestS3Bucket extends S3Bucket {
-				update(bucket) {
-					return Promise.resolve({updateInvoked: bucket.metadata.name});
+				public update(bucketParam: KubernetesBucket) {
+					return Promise.resolve({updateInvoked: bucketParam.metadata.name});
 				}
+			}
 
-				_createBucket(bucketName, attributes) { // eslint-disable-line no-unused-vars
+			class S3ClientMock extends S3Client {
+				public createBucket(bucketName: string) {
 					const err = new Error(`Simulating ${bucketName} already owned by current account`);
 					err.name = 'BucketAlreadyOwnedByYou';
 					return Promise.reject(err);
@@ -425,11 +414,11 @@ describe('s3', function utilsTest() {
 
 			const bucket = {
 				metadata: {
-					name: 'test-bucket'
+					name: 'test-bucket',
 				},
-				spec: {}
+				spec: {},
 			};
-			const bucketHandler = new TestS3Bucket();
+			const bucketHandler = new TestS3Bucket({}, new S3ClientMock());
 			const result = await bucketHandler.create(bucket);
 			expect(result.updateInvoked).to.be.equal(bucket.metadata.name);
 		});

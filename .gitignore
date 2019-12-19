@@ -1,5 +1,6 @@
 /node_modules/
 /deploy/
+/build/
 npm-debug.log
 
 npm-shrinkwrap.json

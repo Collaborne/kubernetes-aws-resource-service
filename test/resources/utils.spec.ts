@@ -1,10 +1,11 @@
-const chai = require('chai');
-const expect = chai.expect;
+import { expect } from 'chai';
+import 'mocha';
 
-const utils = require('../../src/resources/utils');
+import * as utils from '../../src/resources/utils';
+import { Policy } from '../../src/types/aws';
 
-describe('utils', function utilsTest() {
-	describe('capitalizeFieldNames', function capitalizeFieldNamesTest() {
+describe('utils', () => {
+	describe('capitalizeFieldNames', () => {
 		it('leaves undefined untouched', () => {
 			expect(utils.capitalizeFieldNames(undefined)).to.be.undefined;
 		});
@@ -32,7 +33,7 @@ describe('utils', function utilsTest() {
 		it('invokes the provided recursion helper', () => {
 			const object = {Foo: 'bar'};
 			let called = false;
-			const helper = (path, value, recurse) => {
+			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse) => {
 				called = true;
 				return utils.capitalizeFieldNamesForPath(path, value, recurse);
 			};
@@ -41,13 +42,36 @@ describe('utils', function utilsTest() {
 		});
 		it('provides the object path to the recursion helper', () => {
 			const object = {Foo: {Bar: ['baz']}};
-			let lastPath = [];
-			const helper = (path, value, recurse) => {
+			let lastPath: string[] = [];
+			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse) => {
 				lastPath = path;
 				return utils.capitalizeFieldNamesForPath(path, value, recurse);
 			};
 			utils.capitalizeFieldNames(object, helper);
 			expect(lastPath).to.be.deep.equal(['Foo', 'Bar', '0']);
+		});
+	});
+
+	describe('injectResourceArn', () => {
+		it('injects Arn into all statements', () => {
+			const policy: Policy = {
+				Statement: [
+					{
+						Action: 'action1',
+						Effect: 'Allow',
+					},
+					{
+						Action: 'action2',
+						Effect: 'Allow',
+					},
+				],
+			};
+			const result = utils.injectResourceArn(policy, 'arn');
+			expect(result.Statement).to.be.of.length(2);
+
+			result.Statement.forEach(statement => {
+				expect(statement.Resource).to.be.equal('arn');
+			});
 		});
 	});
 });
