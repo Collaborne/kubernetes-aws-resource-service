@@ -98,11 +98,15 @@ export function injectResourceArn(policy: Policy, resourceArn?: string): Policy 
 	};
 }
 
+function isAwsError(obj: any) {
+	return Boolean(obj.code) && Boolean(obj.message);
+}
+
 export async function retryOnTransientNetworkErrors<T>(logName: string, awsOperation: () => AWSOperation<T>): Promise<T> {
 	const errorRetryDelay = 30000;
 	try {
 		const response = await awsOperation().promise();
-		if (response instanceof AWSError) {
+		if (isAwsError(response)) {
 			logger.warn(`[${logName}]: received error response: ${JSON.stringify(response)}`);
 			throw response;
 		}
