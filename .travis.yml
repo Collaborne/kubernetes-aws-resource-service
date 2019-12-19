@@ -3,7 +3,7 @@ group: beta
 
 language: node_js
 node_js:
-- lts/dubnium
+- lts/erbium
 services:
 - docker
 cache:
