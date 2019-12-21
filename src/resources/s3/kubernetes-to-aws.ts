@@ -1,11 +1,30 @@
-import { PutBucketEncryptionRequest, PutBucketLoggingRequest, PutBucketPolicyRequest, PutBucketVersioningRequest, PutPublicAccessBlockRequest } from 'aws-sdk/clients/s3';
+import {
+	PutBucketEncryptionRequest,
+	PutBucketLifecycleConfigurationRequest,
+	PutBucketLoggingRequest,
+	PutBucketPolicyRequest,
+	PutBucketVersioningRequest,
+	PutPublicAccessBlockRequest,
+} from 'aws-sdk/clients/s3';
 import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
 import { KubernetesPolicy } from '../../types/kubernetes';
 
-import { capitalize, capitalizeFieldNames, injectResourceArn } from '../utils';
-import { BucketEncryption, KubernetesBucket, LoggingConfiguration, PublicAccessBlockConfiguration, VersioningConfiguration } from './kubernetes-config';
+import {
+	capitalize,
+	capitalizeFieldNames,
+	capitalizeFieldNamesForPath,
+	injectResourceArn,
+} from '../utils';
+import {
+	BucketEncryption,
+	KubernetesBucket,
+	LifecycleConfiguration,
+	LoggingConfiguration,
+	PublicAccessBlockConfiguration,
+	VersioningConfiguration,
+} from './kubernetes-config';
 
 const logger = getLogger('s3/kubernetes-to-aws');
 
@@ -16,6 +35,7 @@ interface TranslateAttributesResult {
 	publicAccessBlockParams: PutPublicAccessBlockRequest | null;
 	sseParams: PutBucketEncryptionRequest | null;
 	versioningConfiguration: PutBucketVersioningRequest | null;
+	lifecycleConfiguration: PutBucketLifecycleConfigurationRequest | null;
 }
 
 /**
@@ -29,6 +49,7 @@ interface TranslateAttributesResult {
 export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResult {
 	// Split the spec into parts
 	const {
+		lifecycleConfiguration,
 		loggingConfiguration,
 		bucketEncryption,
 		publicAccessBlockConfiguration,
@@ -56,6 +77,7 @@ export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResu
 	}, {} as {[key: string]: string});
 	return {
 		attributes,
+		lifecycleConfiguration: translateLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration),
 		loggingParams: translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
 		policy: translatePolicy(bucket.metadata.name, policy),
 		publicAccessBlockParams: translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
@@ -181,6 +203,22 @@ function translateVersioningConfiguration(
 	};
 }
 
+function translateLifecycleConfiguration(
+	bucketName: string,
+	lifecycleConfiguration?: LifecycleConfiguration,
+): PutBucketLifecycleConfigurationRequest | null {
+	if (!lifecycleConfiguration) {
+		return null;
+	}
+
+	return {
+		Bucket: bucketName,
+		LifecycleConfiguration: {
+			...capitalizeFieldNames(lifecycleConfiguration, capitalizeFieldNamesForPath, capitalizeFieldNameUpperId),
+		},
+	};
+}
+
 /**
  * Translate the SSE configuration into the 'server-side encryption params' for the AWS SDK.
  *
@@ -238,4 +276,10 @@ function translateBucketEncryption(
 			Rules: rules,
 		},
 	};
+}
+
+function capitalizeFieldNameUpperId(s: string) {
+	const result = capitalize(s);
+
+	return result === 'Id' ? result.toUpperCase() : result;
 }

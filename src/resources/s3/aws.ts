@@ -2,6 +2,7 @@ import { S3 } from 'aws-sdk';
 import {
 	PutBucketAclRequest,
 	PutBucketEncryptionRequest,
+	PutBucketLifecycleConfigurationRequest,
 	PutBucketLoggingRequest,
 	PutBucketPolicyRequest,
 	PutBucketVersioningRequest,
@@ -97,6 +98,17 @@ export class S3Client {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketVersioning', () => this.s3.putBucketVersioning(request));
+	}
+
+	public putLifecycleConfiguration(bucketName: string, lifecycleConfigurationParams: PutBucketLifecycleConfigurationRequest) {
+		if (lifecycleConfigurationParams.Bucket && lifecycleConfigurationParams.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${lifecycleConfigurationParams.Bucket}`);
+		}
+		const request = {
+			...lifecycleConfigurationParams,
+			Bucket: bucketName,
+		};
+		return retryOnTransientNetworkErrors('S3::PutBucketLifecycleConfiguration', () => this.s3.putBucketLifecycleConfiguration(request));
 	}
 
 	public putBucketAcl(bucketName: string, aclAttributes: Omit<PutBucketAclRequest, 'Bucket'> & {Bucket?: string}) {

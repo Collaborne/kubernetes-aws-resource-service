@@ -6,7 +6,12 @@ import { AWSOperation, Policy } from '../types/aws';
 
 const logger = getLogger();
 
-export type CapitalizeFieldNamesForPathHelper = (path: string[], object: any, recurse: CapitalizeFieldNamesForPathHelper) => any;
+export type CapitalizeFieldNamesForPathHelper = (
+	path: string[],
+	object: any,
+	recurse: CapitalizeFieldNamesForPathHelper,
+	capitalizeFieldName: CapitalizeFieldName) => any;
+export type CapitalizeFieldName = (s: string) => string;
 
 export interface NetworkError extends AWSError {
 	errno: string;
@@ -32,13 +37,17 @@ export function capitalize(s: string): string {
 	return s[0].toUpperCase() + s.substring(1);
 }
 
-export function capitalizeFieldNamesForPath(path: string[], object: any, recurse: CapitalizeFieldNamesForPathHelper) {
+export function capitalizeFieldNamesForPath(
+	path: string[],
+	object: any,
+	recurse: CapitalizeFieldNamesForPathHelper,
+	capitalizeFieldName: CapitalizeFieldName) {
 	if (!object || typeof object !== 'object') {
 		return object;
 	}
 
 	return Object.keys(object).reduce((result: any, key) => {
-		result[capitalize(key)] = recurse(path.concat([key]), object[key], recurse);
+		result[capitalizeFieldName(key)] = recurse(path.concat([key]), object[key], recurse, capitalizeFieldName);
 		return result;
 	}, Array.isArray(object) ? [] : {});
 }
@@ -52,10 +61,14 @@ export function capitalizeFieldNamesForPath(path: string[], object: any, recurse
  * @param [capitalizeFieldNamesForPathHelper] recursion helper function, defaults to `capitalizeFieldNamesForPath`
  * @return the incoming object with field names recursively capitalized
  */
-export function capitalizeFieldNames(object: any, capitalizeFieldNamesForPathHelper?: CapitalizeFieldNamesForPathHelper): any {
+export function capitalizeFieldNames(
+	object: any,
+	capitalizeFieldNamesForPathHelper?: CapitalizeFieldNamesForPathHelper,
+	capitalizeFieldName?: CapitalizeFieldName): any {
 	// NB: We cannot use default parameters here, as these get evaluated at the call-site, where the helper may not be imported.
 	const helper = capitalizeFieldNamesForPathHelper || capitalizeFieldNamesForPath;
-	return helper([], object, helper);
+	const capitalizer = capitalizeFieldName || capitalize;
+	return helper([], object, helper, capitalizer);
 }
 
 export function md5(data: crypto.BinaryLike) {

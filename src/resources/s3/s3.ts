@@ -30,6 +30,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 	public async create(bucket: KubernetesBucket): Promise<any> {
 		const {
 			attributes,
+			lifecycleConfiguration,
 			loggingParams,
 			policy,
 			publicAccessBlockParams,
@@ -57,6 +58,9 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			}
 			if (versioningConfiguration) {
 				await this.s3Client.putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
+			}
+			if (lifecycleConfiguration) {
+				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
 			}
 
 			return response;
@@ -98,6 +102,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			// - location: Cannot be changed, so we should just check whether getBucketLocation returns the correct one
 			const {
 				attributes: {ACL, CreateBucketConfiguration = {LocationConstraint: 'us-west-1'}},
+				lifecycleConfiguration,
 				loggingParams,
 				policy,
 				publicAccessBlockParams,
@@ -136,6 +141,9 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			}
 			if (versioningConfiguration) {
 				await this.s3Client.putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
+			}
+			if (lifecycleConfiguration) {
+				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
 			}
 
 			return response;

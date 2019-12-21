@@ -2,7 +2,7 @@ import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
 
-import { capitalize, capitalizeFieldNames, capitalizeFieldNamesForPath, CapitalizeFieldNamesForPathHelper } from '../utils';
+import { capitalize, CapitalizeFieldName, capitalizeFieldNames, capitalizeFieldNamesForPath, CapitalizeFieldNamesForPathHelper } from '../utils';
 import { KubernetesRole } from './kubernetes-config';
 
 const logger = getLogger('iam/kubernetes-to-aws');
@@ -58,10 +58,14 @@ export function translateAttributes(resource: KubernetesRole): TranslateAttribut
 	};
 }
 
-function capitalizeFieldNamesForPathExceptCondition(path: string[], object: any, recurse: CapitalizeFieldNamesForPathHelper) {
+function capitalizeFieldNamesForPathExceptCondition(
+	path: string[],
+	object: any,
+	recurse: CapitalizeFieldNamesForPathHelper,
+	capitalizeFieldName: CapitalizeFieldName) {
 	if (path.length > 0 && capitalize(path[path.length - 1]) === 'Condition') {
 		return object;
 	}
 
-	return capitalizeFieldNamesForPath(path, object, recurse);
+	return capitalizeFieldNamesForPath(path, object, recurse, capitalizeFieldName);
 }

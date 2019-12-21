@@ -33,9 +33,9 @@ describe('utils', () => {
 		it('invokes the provided recursion helper', () => {
 			const object = {Foo: 'bar'};
 			let called = false;
-			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse) => {
+			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse, capitalizeFieldName) => {
 				called = true;
-				return utils.capitalizeFieldNamesForPath(path, value, recurse);
+				return utils.capitalizeFieldNamesForPath(path, value, recurse, capitalizeFieldName);
 			};
 			utils.capitalizeFieldNames(object, helper);
 			expect(called).to.be.true;
@@ -43,9 +43,9 @@ describe('utils', () => {
 		it('provides the object path to the recursion helper', () => {
 			const object = {Foo: {Bar: ['baz']}};
 			let lastPath: string[] = [];
-			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse) => {
+			const helper: utils.CapitalizeFieldNamesForPathHelper = (path, value, recurse, capitalizeFieldName) => {
 				lastPath = path;
-				return utils.capitalizeFieldNamesForPath(path, value, recurse);
+				return utils.capitalizeFieldNamesForPath(path, value, recurse, capitalizeFieldName);
 			};
 			utils.capitalizeFieldNames(object, helper);
 			expect(lastPath).to.be.deep.equal(['Foo', 'Bar', '0']);

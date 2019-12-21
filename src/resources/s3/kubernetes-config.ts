@@ -27,6 +27,7 @@ interface BucketSpec {
 	 */
 	acl?: Acl;
 	createBucketConfiguration?: CreateBucketConfiguration;
+	lifecycleConfiguration?: LifecycleConfiguration;
 	loggingConfiguration?: LoggingConfiguration;
 	/**
 	 * configuration for SSE
@@ -100,4 +101,8 @@ interface ServerSideEncryptionConfigurationRule {
 }
 export interface BucketEncryption {
 	serverSideEncryptionConfiguration?: ServerSideEncryptionConfigurationRule[];
+}
+
+export interface LifecycleConfiguration {
+	[key: string]: any;
 }

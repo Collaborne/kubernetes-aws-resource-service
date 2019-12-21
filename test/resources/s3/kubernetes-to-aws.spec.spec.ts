@@ -365,34 +365,52 @@ describe('s3', function utilsTest() {
 			});
 		});
 
-		describe('Versioning Configuration', () => {
-			it('translates Versioning configuration', () => {
+		describe('Lifecycle Configuration', () => {
+			it('translates Lifecycle Configuration', () => {
 				const expectedResult = {
 					Bucket: 'TestBucket',
-					VersioningConfiguration: {
-						Status: 'Enabled',
+					LifecycleConfiguration: {
+						Rules: [
+							{
+								AbortIncompleteMultipartUpload: {
+									DaysAfterInitiation: 7,
+								},
+								ID: 'Test Rule',
+								Prefix: '',
+								Status: 'Enabled',
+							},
+						],
 					},
 				};
-				const {versioningConfiguration} = translateSpec({
+				const {lifecycleConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
 					spec: {
-						versioningConfiguration: {
-							status: 'Enabled',
+						lifecycleConfiguration: {
+							rules: [
+								{
+									abortIncompleteMultipartUpload: {
+										daysAfterInitiation: 7,
+									},
+									id: 'Test Rule',
+									prefix: '',
+									status: 'Enabled',
+								},
+							],
 						},
 					},
 				});
-				expect(versioningConfiguration).to.be.deep.equal(expectedResult);
+				expect(lifecycleConfiguration).to.be.deep.equal(expectedResult);
 			});
-			it('returns null for missing Versioning configuration', () => {
-				const {versioningConfiguration} = translateSpec({
+			it('returns null for missing lifecycle Configuration', () => {
+				const {lifecycleConfiguration} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
 					spec: {},
 				});
-				expect(versioningConfiguration).to.be.null;
+				expect(lifecycleConfiguration).to.be.null;
 			});
 		});
 	});
