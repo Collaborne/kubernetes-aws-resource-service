@@ -45,7 +45,7 @@
     "@types/lodash": "^4.14.149",
     "@types/mocha": "^5.2.7",
     "@types/node": "^12.12.21",
-    "@types/yargs": "^13.0.3",
+    "@types/yargs": "^15.0.0",
     "chai": "^4.1.2",
     "install": "^0.13.0",
     "mocha": "^6.0.0",
