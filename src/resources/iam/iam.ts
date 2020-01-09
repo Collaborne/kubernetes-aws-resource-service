@@ -26,7 +26,7 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 	 * @returns a promise that resolves when the role was created
 	 */
 	public async create(role: KubernetesRole) {
-		const {attributes, policies, policyArns} = translateAttributes(role);
+		const {attributes, policies, policyArns, tags} = translateAttributes(role);
 		const response = await this.iamClient.createRole(role.metadata.name, attributes);
 		const roleName = response.Role.RoleName;
 		const putRolePolicyPromises = policies.map(policy => {
@@ -36,6 +36,10 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 		const attachRolePolicyPromises = policyArns.map(policyArn => {
 			return this.iamClient.attachRolePolicy(roleName, policyArn);
 		});
+
+		if (tags) {
+			await this.iamClient.tagRole(roleName, tags);
+		}
 
 		return Promise.all([putRolePolicyPromises, attachRolePolicyPromises]);
 	}
@@ -48,7 +52,7 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 	 */
 	public async update(role: KubernetesRole) {
 		const roleName = role.metadata.name;
-		const {attributes, policies, policyArns} = translateAttributes(role);
+		const {attributes, policies, policyArns, tags} = translateAttributes(role);
 		try {
 			const iamRole = await this.iamClient.getRole(roleName);
 			// First check the path: It cannot be changed, so we will not allow any update to it.
@@ -120,6 +124,10 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 			if (!_.isEqual(existingAssumeRolePolicy, expectedAssumeRolePolicy)) {
 				logger.debug(`[${roleName}]: Updating assume role policy`);
 				updatePromises.push(this.iamClient.updateAssumeRolePolicy(roleName, expectedAssumeRolePolicy));
+			}
+
+			if (tags) {
+				await this.iamClient.tagRole(roleName, tags);
 			}
 
 			return Promise.all(updatePromises);

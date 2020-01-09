@@ -1,7 +1,9 @@
+import { TagRoleRequest } from 'aws-sdk/clients/iam';
 import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
 
+import { KubernetesTag } from '../../types/kubernetes';
 import { capitalize, CapitalizeFieldName, capitalizeFieldNames, capitalizeFieldNamesForPath, CapitalizeFieldNamesForPathHelper } from '../utils';
 import { KubernetesRole } from './kubernetes-config';
 
@@ -11,6 +13,7 @@ interface TranslateAttributesResult {
 	attributes: {[key: string]: any};
 	policies: Policy[];
 	policyArns: string[];
+	tags: TagRoleRequest | null;
 }
 
 /**
@@ -20,9 +23,15 @@ interface TranslateAttributesResult {
  * @return the queue attributes
  */
 export function translateAttributes(resource: KubernetesRole): TranslateAttributesResult {
+	// Split the spec into parts
+	const {
+		tags,
+		...otherAttributes
+	} = resource.spec;
+
 	const policies: Policy[] = [];
 	const policyArns: string[] = [];
-	const attributes = Object.keys(resource.spec || {}).reduce((result, key) => {
+	const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
 		const value = resource.spec[key];
 
 		let resultValue;
@@ -55,6 +64,26 @@ export function translateAttributes(resource: KubernetesRole): TranslateAttribut
 		attributes,
 		policies,
 		policyArns,
+		tags: translateTags(resource.metadata.name, tags),
+	};
+}
+
+function translateTags(
+	roleName: string,
+	tags?: KubernetesTag[],
+): TagRoleRequest | null {
+	if (!tags) {
+		return null;
+	}
+
+	const tagSet = tags.map(tag => ({
+		Key: tag.key,
+		Value: tag.value,
+	}));
+
+	return {
+		RoleName: roleName,
+		Tags: tagSet,
 	};
 }
 

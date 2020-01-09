@@ -1,3 +1,4 @@
+import { TagRoleRequest } from 'aws-sdk/clients/iam';
 import { expect } from 'chai';
 import 'mocha';
 
@@ -46,6 +47,35 @@ describe('iam/kubernetes-to-aws.spec', function utilsTest() {
 					],
 				},
 			]);
+		});
+
+		describe('Tags', () => {
+			it('translates tags', () => {
+				const expected: TagRoleRequest = {
+					RoleName: 'TestRole',
+					Tags: [
+						{
+							Key: 'Environment',
+							Value: 'master',
+						},
+					],
+				};
+				const {tags} = translateAttributes({
+					metadata: {
+						name: 'TestRole',
+					},
+					spec: {
+						policies: [],
+						tags: [
+							{
+								key: 'Environment',
+								value: 'master',
+							},
+						],
+					},
+				});
+				expect(tags).to.be.deep.equals(expected);
+			});
 		});
 	});
 });
