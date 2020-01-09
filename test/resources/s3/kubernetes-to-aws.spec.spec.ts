@@ -1,3 +1,4 @@
+import { PutBucketTaggingRequest } from 'aws-sdk/clients/s3';
 import { expect } from 'chai';
 import 'mocha';
 
@@ -411,6 +412,36 @@ describe('s3', function utilsTest() {
 					spec: {},
 				});
 				expect(lifecycleConfiguration).to.be.null;
+			});
+		});
+
+		describe('Group Resource tagging', () => {
+			it('translates tagging spec', () => {
+				const expected: PutBucketTaggingRequest = {
+					Bucket: 'TestBucket',
+					Tagging: {
+						TagSet: [
+							{
+								Key: 'Environment',
+								Value: 'master',
+							},
+						],
+					},
+				};
+				const {tags: tagging} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						tags: [
+							{
+								key: 'Environment',
+								value: 'master',
+							},
+						],
+					},
+				});
+				expect(tagging).to.be.deep.equals(expected);
 			});
 		});
 	});

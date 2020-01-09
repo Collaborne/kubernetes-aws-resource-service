@@ -24,3 +24,8 @@ export interface KubernetesPolicy {
 	version?: '2012-10-17';
 	statement: KubernetesStatement[];
 }
+
+export interface KubernetesTag {
+	key: string;
+	value: string;
+}

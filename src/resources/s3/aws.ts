@@ -5,6 +5,7 @@ import {
 	PutBucketLifecycleConfigurationRequest,
 	PutBucketLoggingRequest,
 	PutBucketPolicyRequest,
+	PutBucketTaggingRequest,
 	PutBucketVersioningRequest,
 	PutPublicAccessBlockRequest,
 } from 'aws-sdk/clients/s3';
@@ -109,6 +110,17 @@ export class S3Client {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketLifecycleConfiguration', () => this.s3.putBucketLifecycleConfiguration(request));
+	}
+
+	public putTagging(bucketName: string, taggingParams: PutBucketTaggingRequest) {
+		if (taggingParams.Bucket && taggingParams.Bucket !== bucketName) {
+			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${taggingParams.Bucket}`);
+		}
+		const request = {
+			...taggingParams,
+			Bucket: bucketName,
+		};
+		return retryOnTransientNetworkErrors('S3::PutBucketTagging', () => this.s3.putBucketTagging(request));
 	}
 
 	public putBucketAcl(bucketName: string, aclAttributes: Omit<PutBucketAclRequest, 'Bucket'> & {Bucket?: string}) {

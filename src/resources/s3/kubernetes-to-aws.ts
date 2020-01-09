@@ -3,13 +3,14 @@ import {
 	PutBucketLifecycleConfigurationRequest,
 	PutBucketLoggingRequest,
 	PutBucketPolicyRequest,
+	PutBucketTaggingRequest,
 	PutBucketVersioningRequest,
 	PutPublicAccessBlockRequest,
 } from 'aws-sdk/clients/s3';
 import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
-import { KubernetesPolicy } from '../../types/kubernetes';
+import { KubernetesPolicy, KubernetesTag } from '../../types/kubernetes';
 
 import {
 	capitalize,
@@ -36,6 +37,7 @@ interface TranslateAttributesResult {
 	sseParams: PutBucketEncryptionRequest | null;
 	versioningConfiguration: PutBucketVersioningRequest | null;
 	lifecycleConfiguration: PutBucketLifecycleConfigurationRequest | null;
+	tags: PutBucketTaggingRequest | null;
 }
 
 /**
@@ -55,6 +57,7 @@ export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResu
 		publicAccessBlockConfiguration,
 		versioningConfiguration,
 		policy,
+		tags,
 		...otherAttributes
 	} = bucket.spec;
 	const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
@@ -82,6 +85,7 @@ export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResu
 		policy: translatePolicy(bucket.metadata.name, policy),
 		publicAccessBlockParams: translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
 		sseParams: translateBucketEncryption(bucket.metadata.name, bucketEncryption),
+		tags: translateTags(bucket.metadata.name, tags),
 		versioningConfiguration: translateVersioningConfiguration(bucket.metadata.name, versioningConfiguration),
 	};
 }
@@ -274,6 +278,27 @@ function translateBucketEncryption(
 		Bucket: bucketName,
 		ServerSideEncryptionConfiguration: {
 			Rules: rules,
+		},
+	};
+}
+
+function translateTags(
+	bucketName: string,
+	tags?: KubernetesTag[],
+): PutBucketTaggingRequest | null {
+	if (!tags) {
+		return null;
+	}
+
+	const tagSet = tags.map(tag => ({
+		Key: tag.key,
+		Value: tag.value,
+	}));
+
+	return {
+		Bucket: bucketName,
+		Tagging: {
+			TagSet: tagSet,
 		},
 	};
 }

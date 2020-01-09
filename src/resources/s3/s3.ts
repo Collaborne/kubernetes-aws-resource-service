@@ -35,6 +35,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			policy,
 			publicAccessBlockParams,
 			sseParams,
+			tags,
 			versioningConfiguration,
 		} = translateSpec(bucket);
 		try {
@@ -61,6 +62,9 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			}
 			if (lifecycleConfiguration) {
 				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
+			}
+			if (tags) {
+				await this.s3Client.putTagging(bucket.metadata.name, tags);
 			}
 
 			return response;
@@ -107,6 +111,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 				policy,
 				publicAccessBlockParams,
 				sseParams,
+				tags,
 				versioningConfiguration,
 			} = translateSpec(bucket);
 			const bucketLocation = await this.s3Client.getBucketLocation(bucketName);
@@ -144,6 +149,9 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			}
 			if (lifecycleConfiguration) {
 				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
+			}
+			if (tags) {
+				await this.s3Client.putTagging(bucket.metadata.name, tags);
 			}
 
 			return response;
