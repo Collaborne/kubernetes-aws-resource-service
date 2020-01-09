@@ -415,8 +415,8 @@ describe('s3', function utilsTest() {
 			});
 		});
 
-		describe('Group Resource tagging', () => {
-			it('translates tagging spec', () => {
+		describe('Tags', () => {
+			it('translates tags', () => {
 				const expected: PutBucketTaggingRequest = {
 					Bucket: 'TestBucket',
 					Tagging: {
