@@ -1,6 +1,6 @@
 {
   "name": "kubernetes-aws-resource-service",
-  "version": "0.18.0-0",
+  "version": "0.18.0-1",
   "description": "Manage AWS resources via kubernetes",
   "main": "src/index.js",
   "scripts": {
