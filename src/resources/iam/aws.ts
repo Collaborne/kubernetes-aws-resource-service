@@ -41,6 +41,14 @@ export class IAMClient {
 		return retryOnTransientNetworkErrors(`${roleName} - IAM::DeleteRole`, () => this.iam.deleteRole(request));
 	}
 
+	public tagRole(roleName: string, tags: Tag[]) {
+		const request = {
+			RoleName: roleName,
+			Tags: tags,
+		};
+		return retryOnTransientNetworkErrors(`${roleName} - IAM::TagRole`, () => this.iam.tagRole(request));
+	}
+
 	public async listRolePolicies(roleName: string) {
 		const request = {
 			RoleName: roleName,
@@ -58,14 +66,6 @@ export class IAMClient {
 		// Log each added policy and the content
 		logger.info(`[${roleName}]: Adding policy ${policyName} '${JSON.stringify(policy)}'`);
 		return retryOnTransientNetworkErrors(`${roleName} - IAM::PutRolePolicy`, () => this.iam.putRolePolicy(request));
-	}
-
-	public tagRole(roleName: string, tags: Tag[]) {
-		const request = {
-			RoleName: roleName,
-			Tags: tags,
-		};
-		return retryOnTransientNetworkErrors(`${roleName} - IAM::TagRole`, () => this.iam.tagRole(request));
 	}
 
 	public deleteRolePolicy(roleName: string, policyName: string) {
