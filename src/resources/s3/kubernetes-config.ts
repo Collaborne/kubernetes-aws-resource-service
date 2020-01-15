@@ -1,3 +1,5 @@
+import { BucketLocationConstraint } from 'aws-sdk/clients/s3';
+
 import { KubernetesMetadata, KubernetesPolicy } from '../../types/kubernetes';
 
 /**
@@ -42,20 +44,8 @@ interface BucketSpec {
 	[key: string]: any;
 }
 
-type AWSRegion =
-	'EU' |
-	'eu-west-1' |
-	'us-west-1' |
-	'us-west-2' |
-	'ap-south-1' |
-	'ap-southeast-1' |
-	'ap-southeast-2' |
-	'ap-northeast-1' |
-	'sa-east-1' |
-	'cn-north-1' |
-	'eu-central-1';
 interface CreateBucketConfiguration {
-	locationConstraint: AWSRegion;
+	locationConstraint: BucketLocationConstraint;
 }
 
 /**
