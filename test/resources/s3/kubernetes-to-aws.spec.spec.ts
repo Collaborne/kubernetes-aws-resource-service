@@ -1,4 +1,3 @@
-import { PutBucketTaggingRequest } from 'aws-sdk/clients/s3';
 import { expect } from 'chai';
 import 'mocha';
 
@@ -56,9 +55,7 @@ describe('s3', function utilsTest() {
 		describe('Bucket policy', () => {
 			it('translates bucket policy', () => {
 				const expectedPolicy = {
-					Bucket: 'TestBucket',
-					ConfirmRemoveSelfBucketAccess: false,
-					Policy: '{"Statement":[]}',
+					Statement: [],
 				};
 				const {policy} = translateSpec({
 					metadata: {
@@ -74,9 +71,13 @@ describe('s3', function utilsTest() {
 			});
 			it('injects bucket ARN into policy statements', () => {
 				const expectedPolicy = {
-					Bucket: 'TestBucket',
-					ConfirmRemoveSelfBucketAccess: false,
-					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow"}]}',
+					Statement: [
+						{
+							Action: '*',
+							Effect: 'Allow',
+							Resource: 'arn:aws:s3:::TestBucket',
+						},
+					],
 				};
 				const {policy} = translateSpec({
 					metadata: {
@@ -97,9 +98,13 @@ describe('s3', function utilsTest() {
 			});
 			it('retains defined resources in policy statements', () => {
 				const expectedPolicy = {
-					Bucket: 'TestBucket',
-					ConfirmRemoveSelfBucketAccess: false,
-					Policy: '{"Statement":[{"Resource":"arn:something","Action":"*","Effect":"Allow"}]}',
+					Statement: [
+						{
+							Action: '*',
+							Effect: 'Allow',
+							Resource: 'arn:something',
+						},
+					],
 				};
 				const {policy} = translateSpec({
 					metadata: {
@@ -121,9 +126,16 @@ describe('s3', function utilsTest() {
 			});
 			it('translates "AWS" principals', () => {
 				const expectedPolicy = {
-					Bucket: 'TestBucket',
-					ConfirmRemoveSelfBucketAccess: false,
-					Policy: '{"Statement":[{"Resource":"arn:aws:s3:::TestBucket","Action":"*","Effect":"Allow","Principal":{"AWS":"principal"}}]}',
+					Statement: [
+						{
+							Action: '*',
+							Effect: 'Allow',
+							Principal: {
+								AWS: 'principal',
+							},
+							Resource: 'arn:aws:s3:::TestBucket',
+						},
+					],
 				};
 				const {policy} = translateSpec({
 					metadata: {
@@ -150,17 +162,14 @@ describe('s3', function utilsTest() {
 		describe('Bucket encryption', () => {
 			it('translates bucket-encryption fields (KMS)', () => {
 				const expectedResult = {
-					Bucket: 'TestBucket',
-					ServerSideEncryptionConfiguration: {
-						Rules: [
-							{
-								ApplyServerSideEncryptionByDefault: {
-									KMSMasterKeyId: 'kmsMasterKeyId',
-									SSEAlgorithm: 'aws:kms',
-								},
+					Rules: [
+						{
+							ApplyServerSideEncryptionByDefault: {
+								KMSMasterKeyId: 'kmsMasterKeyId',
+								SSEAlgorithm: 'aws:kms',
 							},
-						],
-					},
+						},
+					],
 				};
 				const {sseParams} = translateSpec({
 					metadata: {
@@ -183,16 +192,13 @@ describe('s3', function utilsTest() {
 			});
 			it('translates bucket-encryption fields (AES256)', () => {
 				const expectedResult = {
-					Bucket: 'TestBucket',
-					ServerSideEncryptionConfiguration: {
-						Rules: [
-							{
-								ApplyServerSideEncryptionByDefault: {
-									SSEAlgorithm: 'AES256',
-								},
+					Rules: [
+						{
+							ApplyServerSideEncryptionByDefault: {
+								SSEAlgorithm: 'AES256',
 							},
-						],
-					},
+						},
+					],
 				};
 				const {sseParams} = translateSpec({
 					metadata: {
@@ -301,13 +307,10 @@ describe('s3', function utilsTest() {
 		describe('Public Access Block', () => {
 			it('translates Public Access Block configuration', () => {
 				const expectedResult = {
-					Bucket: 'TestBucket',
-					PublicAccessBlockConfiguration: {
-						BlockPublicAcls: true,
-						BlockPublicPolicy: true,
-						IgnorePublicAcls: true,
-						RestrictPublicBuckets: true,
-					},
+					BlockPublicAcls: true,
+					BlockPublicPolicy: true,
+					IgnorePublicAcls: true,
+					RestrictPublicBuckets: true,
 				};
 				const {publicAccessBlockParams} = translateSpec({
 					metadata: {
@@ -338,10 +341,7 @@ describe('s3', function utilsTest() {
 		describe('Versioning Configuration', () => {
 			it('translates Versioning configuration', () => {
 				const expectedResult = {
-					Bucket: 'TestBucket',
-					VersioningConfiguration: {
-						Status: 'Enabled',
-					},
+					Status: 'Enabled',
 				};
 				const {versioningConfiguration} = translateSpec({
 					metadata: {
@@ -369,19 +369,16 @@ describe('s3', function utilsTest() {
 		describe('Lifecycle Configuration', () => {
 			it('translates Lifecycle Configuration', () => {
 				const expectedResult = {
-					Bucket: 'TestBucket',
-					LifecycleConfiguration: {
-						Rules: [
-							{
-								AbortIncompleteMultipartUpload: {
-									DaysAfterInitiation: 7,
-								},
-								ID: 'Test Rule',
-								Prefix: '',
-								Status: 'Enabled',
+					Rules: [
+						{
+							AbortIncompleteMultipartUpload: {
+								DaysAfterInitiation: 7,
 							},
-						],
-					},
+							ID: 'Test Rule',
+							Prefix: '',
+							Status: 'Enabled',
+						},
+					],
 				};
 				const {lifecycleConfiguration} = translateSpec({
 					metadata: {
@@ -417,18 +414,13 @@ describe('s3', function utilsTest() {
 
 		describe('Tags', () => {
 			it('translates tags', () => {
-				const expected: PutBucketTaggingRequest = {
-					Bucket: 'TestBucket',
-					Tagging: {
-						TagSet: [
-							{
-								Key: 'Environment',
-								Value: 'master',
-							},
-						],
+				const expected = [
+					{
+						Key: 'Environment',
+						Value: 'master',
 					},
-				};
-				const {tags: tagging} = translateSpec({
+				];
+				const {tags} = translateSpec({
 					metadata: {
 						name: 'TestBucket',
 					},
@@ -441,7 +433,7 @@ describe('s3', function utilsTest() {
 						],
 					},
 				});
-				expect(tagging).to.be.deep.equals(expected);
+				expect(tags).to.be.deep.equals(expected);
 			});
 		});
 	});
