@@ -13,7 +13,7 @@ interface TranslateAttributesResult {
 	attributes: {[key: string]: any};
 	policies: Policy[];
 	policyArns: string[];
-	tags: Tag[] | null;
+	tags: Tag[];
 }
 
 /**
@@ -64,14 +64,11 @@ export function translateAttributes(resource: KubernetesRole): TranslateAttribut
 		attributes,
 		policies,
 		policyArns,
-		tags: translateTags(tags),
+		tags: translateTags(tags || []),
 	};
 }
 
-function translateTags(tags?: KubernetesTag[]): Tag[] | null {
-	if (!tags) {
-		return null;
-	}
+function translateTags(tags: KubernetesTag[]): Tag[] {
 	return tags.map(tag => ({
 		Key: tag.key,
 		Value: tag.value,

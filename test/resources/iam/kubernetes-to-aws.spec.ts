@@ -74,6 +74,17 @@ describe('iam/kubernetes-to-aws.spec', function utilsTest() {
 				});
 				expect(tags).to.be.deep.equals(expected);
 			});
+			it('returns an empty tag list if tags are missing', () => {
+				const {tags} = translateAttributes({
+					metadata: {
+						name: 'TestRole',
+					},
+					spec: {
+						policies: [],
+					},
+				});
+				expect(tags).to.be.deep.equals([]);
+			});
 		});
 	});
 });

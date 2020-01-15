@@ -37,11 +37,9 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 			return this.iamClient.attachRolePolicy(roleName, policyArn);
 		});
 
-		if (tags) {
-			await this.iamClient.tagRole(roleName, tags);
-		}
+		const tagRolePromise = this.iamClient.tagRole(roleName, tags);
 
-		return Promise.all([putRolePolicyPromises, attachRolePolicyPromises]);
+		return Promise.all([putRolePolicyPromises, attachRolePolicyPromises, tagRolePromise]);
 	}
 
 	/**
