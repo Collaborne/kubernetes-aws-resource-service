@@ -46,7 +46,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations",
 			// which won't be retried.
 			if (policy) {
-				await this.s3Client.putBucketPolicy(bucket.metadata.name, policy);
+				await this.s3Client.putBucketPolicy(bucket.metadata.name, policy, false);
 			}
 			if (loggingParams) {
 				await this.s3Client.putBucketLogging(bucket.metadata.name, loggingParams);
@@ -127,7 +127,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 				await this.s3Client.putBucketAcl(bucketName, {ACL});
 			}
 			if (policy) {
-				await this.s3Client.putBucketPolicy(bucketName, policy);
+				await this.s3Client.putBucketPolicy(bucketName, policy, false);
 			} else {
 				await this.s3Client.deleteBucketPolicy(bucketName);
 			}

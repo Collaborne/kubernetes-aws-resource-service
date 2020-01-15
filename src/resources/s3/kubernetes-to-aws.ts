@@ -1,11 +1,10 @@
 import {
-	PutBucketEncryptionRequest,
-	PutBucketLifecycleConfigurationRequest,
-	PutBucketLoggingRequest,
-	PutBucketPolicyRequest,
-	PutBucketTaggingRequest,
-	PutBucketVersioningRequest,
-	PutPublicAccessBlockRequest,
+	BucketLifecycleConfiguration,
+	BucketLoggingStatus,
+	PublicAccessBlockConfiguration,
+	ServerSideEncryptionConfiguration,
+	Tag,
+	VersioningConfiguration,
 } from 'aws-sdk/clients/s3';
 import { getLogger } from 'log4js';
 
@@ -18,26 +17,19 @@ import {
 	capitalizeFieldNamesForPath,
 	injectResourceArn,
 } from '../utils';
-import {
-	BucketEncryption,
-	KubernetesBucket,
-	LifecycleConfiguration,
-	LoggingConfiguration,
-	PublicAccessBlockConfiguration,
-	VersioningConfiguration,
-} from './kubernetes-config';
+import * as Config from './kubernetes-config';
 
 const logger = getLogger('s3/kubernetes-to-aws');
 
 interface TranslateAttributesResult {
 	attributes: {[key: string]: any};
-	loggingParams: PutBucketLoggingRequest | null;
-	policy: PutBucketPolicyRequest | null;
-	publicAccessBlockParams: PutPublicAccessBlockRequest | null;
-	sseParams: PutBucketEncryptionRequest | null;
-	versioningConfiguration: PutBucketVersioningRequest | null;
-	lifecycleConfiguration: PutBucketLifecycleConfigurationRequest | null;
-	tags: PutBucketTaggingRequest | null;
+	loggingParams: BucketLoggingStatus | null;
+	policy: Policy | null;
+	publicAccessBlockParams: PublicAccessBlockConfiguration | null;
+	sseParams: ServerSideEncryptionConfiguration | null;
+	versioningConfiguration: VersioningConfiguration | null;
+	lifecycleConfiguration: BucketLifecycleConfiguration | null;
+	tags: Tag[] | null;
 }
 
 /**
@@ -48,7 +40,7 @@ interface TranslateAttributesResult {
  * @param bucket a bucket definition
  * @return the bucket attributes
  */
-export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResult {
+export function translateSpec(bucket: Config.KubernetesBucket): TranslateAttributesResult {
 	// Split the spec into parts
 	const {
 		lifecycleConfiguration,
@@ -80,36 +72,30 @@ export function translateSpec(bucket: KubernetesBucket): TranslateAttributesResu
 	}, {} as {[key: string]: string});
 	return {
 		attributes,
-		lifecycleConfiguration: translateLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration),
-		loggingParams: translateLoggingConfiguration(bucket.metadata.name, loggingConfiguration),
-		policy: translatePolicy(bucket.metadata.name, policy),
-		publicAccessBlockParams: translatePublicAccessBlockConfiguration(bucket.metadata.name, publicAccessBlockConfiguration),
-		sseParams: translateBucketEncryption(bucket.metadata.name, bucketEncryption),
-		tags: translateTags(bucket.metadata.name, tags),
-		versioningConfiguration: translateVersioningConfiguration(bucket.metadata.name, versioningConfiguration),
+		lifecycleConfiguration: translateLifecycleConfiguration(lifecycleConfiguration),
+		loggingParams: translateLoggingConfiguration(loggingConfiguration),
+		policy: translatePolicy(policy, bucket.metadata.name),
+		publicAccessBlockParams: translatePublicAccessBlockConfiguration(publicAccessBlockConfiguration),
+		sseParams: translateBucketEncryption(bucketEncryption),
+		tags: translateTags(tags),
+		versioningConfiguration: translateVersioningConfiguration(versioningConfiguration),
 	};
 }
 
 /**
  * Translate the policy into the 'put bucket policy params' for the AWS SDK.
  *
- * @param bucketName the bucket name
  * @param bucketPolicy Bucket policy
- * @returns the parameters for `putBucketPolicy`, or `null`
+ * @param bucketName the bucket name to inject into the policy
+ * @returns the policy for use in AWS `PutBucketPolicy` requests
  */
-function translatePolicy(bucketName: string, bucketPolicy?: KubernetesPolicy): PutBucketPolicyRequest | null {
+function translatePolicy(bucketPolicy: KubernetesPolicy | undefined, bucketName: string): Policy | null {
 	if (!bucketPolicy) {
 		return null;
 	}
 
 	const bucketArn = `arn:aws:s3:::${bucketName}`;
-	return {
-		Bucket: bucketName,
-
-		/* XXX: For now do not allow setting this value */
-		ConfirmRemoveSelfBucketAccess: false,
-		Policy: JSON.stringify(injectBucketArn(bucketName, capitalizeFieldNames(bucketPolicy), bucketArn), undefined, 0),
-	};
+	return injectBucketArn(bucketName, capitalizeFieldNames(bucketPolicy), bucketArn);
 }
 
 /**
@@ -132,14 +118,10 @@ function injectBucketArn(bucketName: string, policy: Policy, bucketArn?: string)
 /**
  * Translate the logging configuration into the 'logging params' for the AWS SDK.
  *
- * @param bucketName the bucket name
  * @param loggingConfiguration logging configuration
  * @returns the parameters for `putBucketLogging`
  */
-function translateLoggingConfiguration(
-	bucketName: string,
-	loggingConfiguration?: LoggingConfiguration,
-): PutBucketLoggingRequest {
+function translateLoggingConfiguration(loggingConfiguration?: Config.LoggingConfiguration): BucketLoggingStatus {
 	let status;
 	if (!loggingConfiguration) {
 		status = {};
@@ -152,35 +134,25 @@ function translateLoggingConfiguration(
 		};
 	}
 
-	return {
-		Bucket: bucketName,
-		BucketLoggingStatus: status,
-	};
+	return status;
 }
 
 /**
  * Translate the logging configuration into the 'logging params' for the AWS SDK.
  *
- * @param bucketName the bucket name
  * @param publicAccessBlockConfiguration Public Access Block configuration
  * @returns the parameters for `putPublicAccessBlock`, or `null`
  */
-function translatePublicAccessBlockConfiguration(
-	bucketName: string,
-	publicAccessBlockConfiguration?: PublicAccessBlockConfiguration,
-): PutPublicAccessBlockRequest | null {
+function translatePublicAccessBlockConfiguration(publicAccessBlockConfiguration?: Config.PublicAccessBlockConfiguration): PublicAccessBlockConfiguration | null {
 	if (!publicAccessBlockConfiguration) {
 		return null;
 	}
 
 	return {
-		Bucket: bucketName,
-		PublicAccessBlockConfiguration: {
-			BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
-			BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
-			IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
-			RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
-		},
+		BlockPublicAcls: publicAccessBlockConfiguration.blockPublicAcls,
+		BlockPublicPolicy: publicAccessBlockConfiguration.blockPublicPolicy,
+		IgnorePublicAcls: publicAccessBlockConfiguration.ignorePublicAcls,
+		RestrictPublicBuckets: publicAccessBlockConfiguration.restrictPublicBuckets,
 	};
 }
 
@@ -191,49 +163,33 @@ function translatePublicAccessBlockConfiguration(
  * @param versioningConfiguration Public Access Block configuration
  * @returns the parameters for `versioningConfiguration`, or `null`
  */
-function translateVersioningConfiguration(
-	bucketName: string,
-	versioningConfiguration?: VersioningConfiguration,
-): PutBucketVersioningRequest | null {
+function translateVersioningConfiguration(versioningConfiguration?: Config.VersioningConfiguration): VersioningConfiguration | null {
 	if (!versioningConfiguration) {
 		return null;
 	}
 
 	return {
-		Bucket: bucketName,
-		VersioningConfiguration: {
-			Status: versioningConfiguration.status,
-		},
+		Status: versioningConfiguration.status,
 	};
 }
 
-function translateLifecycleConfiguration(
-	bucketName: string,
-	lifecycleConfiguration?: LifecycleConfiguration,
-): PutBucketLifecycleConfigurationRequest | null {
+function translateLifecycleConfiguration(lifecycleConfiguration?: Config.LifecycleConfiguration): BucketLifecycleConfiguration | null {
 	if (!lifecycleConfiguration) {
 		return null;
 	}
 
 	return {
-		Bucket: bucketName,
-		LifecycleConfiguration: {
-			...capitalizeFieldNames(lifecycleConfiguration, capitalizeFieldNamesForPath, capitalizeFieldNameUpperId),
-		},
+		...capitalizeFieldNames(lifecycleConfiguration, capitalizeFieldNamesForPath, capitalizeFieldNameUpperId),
 	};
 }
 
 /**
  * Translate the SSE configuration into the 'server-side encryption params' for the AWS SDK.
  *
- * @param bucketName the bucket name
  * @param bucketEncryption Bucket encryption (as per https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-bucketencryption.html)
  * @returns the parameters for `putBucketEncryption`, or `null`
  */
-function translateBucketEncryption(
-	bucketName: string,
-	bucketEncryption?: BucketEncryption,
-): PutBucketEncryptionRequest | null {
+function translateBucketEncryption(bucketEncryption?: Config.BucketEncryption): ServerSideEncryptionConfiguration | null {
 	if (!bucketEncryption || !bucketEncryption.serverSideEncryptionConfiguration) {
 		return null;
 	}
@@ -274,33 +230,18 @@ function translateBucketEncryption(
 		return null;
 	}
 
-	return {
-		Bucket: bucketName,
-		ServerSideEncryptionConfiguration: {
-			Rules: rules,
-		},
-	};
+	return {Rules: rules};
 }
 
-function translateTags(
-	bucketName: string,
-	tags?: KubernetesTag[],
-): PutBucketTaggingRequest | null {
+function translateTags(tags?: KubernetesTag[]): Tag[] | null {
 	if (!tags) {
 		return null;
 	}
 
-	const tagSet = tags.map(tag => ({
+	return tags.map(tag => ({
 		Key: tag.key,
 		Value: tag.value,
 	}));
-
-	return {
-		Bucket: bucketName,
-		Tagging: {
-			TagSet: tagSet,
-		},
-	};
 }
 
 function capitalizeFieldNameUpperId(s: string) {

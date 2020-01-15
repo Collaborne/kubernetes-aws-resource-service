@@ -1,5 +1,15 @@
 import { S3 } from 'aws-sdk';
 import {
+	BucketLifecycleConfiguration,
+	BucketLoggingStatus,
+	CreateBucketRequest,
+	DeleteBucketEncryptionRequest,
+	DeleteBucketPolicyRequest,
+	DeleteBucketRequest,
+	DeletePublicAccessBlockRequest,
+	GetBucketLocationRequest,
+	HeadBucketRequest,
+	PublicAccessBlockConfiguration,
 	PutBucketAclRequest,
 	PutBucketEncryptionRequest,
 	PutBucketLifecycleConfigurationRequest,
@@ -8,8 +18,12 @@ import {
 	PutBucketTaggingRequest,
 	PutBucketVersioningRequest,
 	PutPublicAccessBlockRequest,
+	ServerSideEncryptionConfiguration,
+	Tag,
+	VersioningConfiguration,
 } from 'aws-sdk/clients/s3';
 
+import { Policy } from '../../types/aws';
 import { retryOnTransientNetworkErrors } from '../utils';
 
 /**
@@ -26,52 +40,43 @@ export class S3Client {
 		if (attributes.Bucket && attributes.Bucket !== bucketName) {
 			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${attributes.Bucket}`);
 		}
-		const request = {
+		const request: CreateBucketRequest = {
 			...attributes,
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::CreateBucket', () => this.s3.createBucket(request));
 	}
 
-	public putBucketLogging(bucketName: string, loggingAttributes: PutBucketLoggingRequest) {
-		if (loggingAttributes.Bucket && loggingAttributes.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${loggingAttributes.Bucket}`);
-		}
-		const request = {
-			...loggingAttributes,
+	public putBucketLogging(bucketName: string, loggingStatus: BucketLoggingStatus) {
+		const request: PutBucketLoggingRequest = {
 			Bucket: bucketName,
+			BucketLoggingStatus: loggingStatus,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketLogging', () => this.s3.putBucketLogging(request));
 	}
 
-	public putBucketEncryption(bucketName: string, sseAttributes: PutBucketEncryptionRequest) {
-		if (sseAttributes.Bucket && sseAttributes.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${sseAttributes.Bucket}`);
-		}
-		const request = {
-			...sseAttributes,
+	public putBucketEncryption(bucketName: string, serverSideEncryptionConfiguration: ServerSideEncryptionConfiguration) {
+		const request: PutBucketEncryptionRequest = {
 			Bucket: bucketName,
+			ServerSideEncryptionConfiguration: serverSideEncryptionConfiguration,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketEncryption', () => this.s3.putBucketEncryption(request));
 	}
 
-	public putPublicAccessBlock(bucketName: string, publicAccessBlockParams: PutPublicAccessBlockRequest) {
-		if (publicAccessBlockParams.Bucket && publicAccessBlockParams.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${publicAccessBlockParams.Bucket}`);
-		}
-		const request = {
-			...publicAccessBlockParams,
+	public putPublicAccessBlock(bucketName: string, publicAccessBlockConfiguration: PublicAccessBlockConfiguration) {
+		const request: PutPublicAccessBlockRequest = {
 			Bucket: bucketName,
+			PublicAccessBlockConfiguration: publicAccessBlockConfiguration,
 		};
 		return retryOnTransientNetworkErrors('S3::PutPublicAccessBlock', () => this.s3.putPublicAccessBlock(request));
 	}
 
-	public async putVersioningConfiguration(bucketName: string, versioningConfigurationParams: PutBucketVersioningRequest) {
+	public async putVersioningConfiguration(bucketName: string, versioningConfigurationParams?: VersioningConfiguration) {
 		// S3 buckets can have the state: Enabled/Suspended/nothing (the later happens
 		// when versioning was never set)
 		// We don't want to set versioning if it's not in S3. If versioning was formerly
 		// set in S3: it should be suspended if the config isn't set in our config.
-		let versioningConfiguration;
+		let versioningConfiguration: VersioningConfiguration;
 		if (!versioningConfigurationParams) {
 			const currentStatusRequest = {Bucket: bucketName};
 			const currentStatusRespose = await retryOnTransientNetworkErrors('S3::GetBucketVersioning', () => this.s3.getBucketVersioning(currentStatusRequest));
@@ -81,107 +86,91 @@ export class S3Client {
 			}
 
 			versioningConfiguration = {
-				Bucket: bucketName,
-				VersioningConfiguration: {
-					Status: 'Suspended',
-				},
+				Status: 'Suspended',
 			};
 		} else {
-			if (versioningConfigurationParams.Bucket && versioningConfigurationParams.Bucket !== bucketName) {
-				throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${versioningConfigurationParams.Bucket}`);
-			}
-
 			versioningConfiguration = versioningConfigurationParams;
 		}
 
-		const request = {
-			...versioningConfiguration,
+		const request: PutBucketVersioningRequest = {
 			Bucket: bucketName,
+			VersioningConfiguration: versioningConfiguration,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketVersioning', () => this.s3.putBucketVersioning(request));
 	}
 
-	public putLifecycleConfiguration(bucketName: string, lifecycleConfigurationParams: PutBucketLifecycleConfigurationRequest) {
-		if (lifecycleConfigurationParams.Bucket && lifecycleConfigurationParams.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${lifecycleConfigurationParams.Bucket}`);
-		}
-		const request = {
-			...lifecycleConfigurationParams,
+	public putLifecycleConfiguration(bucketName: string, lifecycleConfiguration?: BucketLifecycleConfiguration) {
+		const request: PutBucketLifecycleConfigurationRequest = {
 			Bucket: bucketName,
+			LifecycleConfiguration: lifecycleConfiguration,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketLifecycleConfiguration', () => this.s3.putBucketLifecycleConfiguration(request));
 	}
 
-	public putTagging(bucketName: string, taggingParams: PutBucketTaggingRequest) {
-		if (taggingParams.Bucket && taggingParams.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${taggingParams.Bucket}`);
-		}
-		const request = {
-			...taggingParams,
+	public putTagging(bucketName: string, tags: Tag[]) {
+		const request: PutBucketTaggingRequest = {
 			Bucket: bucketName,
+			Tagging: {
+				TagSet: tags,
+			},
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketTagging', () => this.s3.putBucketTagging(request));
 	}
 
-	public putBucketAcl(bucketName: string, aclAttributes: Omit<PutBucketAclRequest, 'Bucket'> & {Bucket?: string}) {
-		if (aclAttributes.Bucket && aclAttributes.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${aclAttributes.Bucket}`);
-		}
-		const request = {
-			...aclAttributes,
+	public putBucketAcl(bucketName: string, aclAttributes: Omit<PutBucketAclRequest, 'Bucket'>) {
+		const request: PutBucketAclRequest = {
 			Bucket: bucketName,
+			...aclAttributes,
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketAcl', () => this.s3.putBucketAcl(request));
 	}
 
-	public putBucketPolicy(bucketName: string, policyAttributes: PutBucketPolicyRequest) {
-		if (policyAttributes.Bucket && policyAttributes.Bucket !== bucketName) {
-			throw new Error(`Inconsistent bucket name in configuration: ${bucketName} !== ${policyAttributes.Bucket}`);
-		}
-		const request = {
-			...policyAttributes,
+	public putBucketPolicy(bucketName: string, policy: Policy, confirmRemoveSelfBucketAccess: boolean) {
+		const request: PutBucketPolicyRequest = {
 			Bucket: bucketName,
+			ConfirmRemoveSelfBucketAccess: confirmRemoveSelfBucketAccess,
+			Policy: JSON.stringify(policy, undefined, 0),
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketPolicy', () => this.s3.putBucketPolicy(request));
 	}
 
 	public deleteBucket(bucketName: string) {
-		const request = {
+		const request: DeleteBucketRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::DeleteBucket', () => this.s3.deleteBucket(request));
 	}
 
 	public deleteBucketEncryption(bucketName: string) {
-		const request = {
+		const request: DeleteBucketEncryptionRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::DeleteBucketEncryption', () => this.s3.deleteBucketEncryption(request));
 	}
 
 	public deletePublicAccessBlock(bucketName: string) {
-		const request = {
+		const request: DeletePublicAccessBlockRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::DeletePublicAccessBlock', () => this.s3.deletePublicAccessBlock(request));
 	}
 
 	public deleteBucketPolicy(bucketName: string) {
-		const request = {
+		const request: DeleteBucketPolicyRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3:DeleteBucketPolicy', () => this.s3.deleteBucketPolicy(request));
 	}
 
 	public headBucket(bucketName: string) {
-		const request = {
+		const request: HeadBucketRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::HeadBucket', () => this.s3.headBucket(request));
 	}
 
 	public getBucketLocation(bucketName: string) {
-		const request = {
+		const request: GetBucketLocationRequest = {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::GetBucketLocation', () => this.s3.getBucketLocation(request));
