@@ -124,9 +124,8 @@ export class IAMRole implements ResourceClient<KubernetesRole> {
 				updatePromises.push(this.iamClient.updateAssumeRolePolicy(roleName, expectedAssumeRolePolicy));
 			}
 
-			if (tags) {
-				await this.iamClient.tagRole(roleName, tags);
-			}
+			// Update the tags of the role
+			updatePromises.push(this.iamClient.updateRoleTags(roleName, tags));
 
 			return Promise.all(updatePromises);
 		} catch (err) {

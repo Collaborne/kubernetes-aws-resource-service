@@ -49,6 +49,54 @@ export class IAMClient {
 		return retryOnTransientNetworkErrors(`${roleName} - IAM::TagRole`, () => this.iam.tagRole(request));
 	}
 
+	public untagRole(roleName: string, tagKeys: string[]) {
+		const request = {
+			RoleName: roleName,
+			TagKeys: tagKeys,
+		};
+		return retryOnTransientNetworkErrors(`${roleName} - IAM::UntagRole`, () => this.iam.untagRole(request));
+	}
+
+	public listRoleTags(roleName: string) {
+		const request = {
+			RoleName: roleName,
+		};
+		return retryOnTransientNetworkErrors(`${roleName} - IAM::ListRoleTags`, () => this.iam.listRoleTags(request));
+	}
+
+	/**
+	 * Helper function to update the tags of a role to the given list of tags.
+	 *
+	 * This helper will remove and add tags so that the tags of the role in AWS matches the provided
+	 * list of tags.
+	 */
+	public async updateRoleTags(roleName: string, tags: Tag[]) {
+		const {Tags: existingTags, IsTruncated: isTruncated} = await this.listRoleTags(roleName);
+		if (isTruncated) {
+			throw new Error(`Role ${roleName} has too many tags, pagination is not implemented`);
+		}
+
+		const tagKeysToRemove = existingTags.map(tag => tag.Key).filter(tagKey => {
+			return !tags.find(t => t.Key === tagKey);
+		});
+		if (tagKeysToRemove.length > 0) {
+			logger.debug(`[${roleName}]: Removing tags with keys ${tagKeysToRemove}`);
+			await this.untagRole(roleName, tagKeysToRemove);
+		}
+
+		const tagsToAdd = tags.filter(tag => {
+			const existingTag = existingTags.find(t => t.Key === tag.Key);
+			if (existingTag) {
+				return existingTag.Value !== tag.Value;
+			}
+			return true;
+		});
+		if (tagsToAdd.length > 0) {
+			logger.debug(`[${roleName}]: Adding tags ${JSON.stringify(tagsToAdd)}`);
+			await this.tagRole(roleName, tagsToAdd);
+		}
+	}
+
 	public async listRolePolicies(roleName: string) {
 		const request = {
 			RoleName: roleName,
