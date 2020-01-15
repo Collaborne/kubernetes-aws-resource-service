@@ -1,4 +1,4 @@
-import { BucketLocationConstraint, BucketVersioningStatus } from 'aws-sdk/clients/s3';
+import { BucketCannedACL, BucketLocationConstraint, BucketVersioningStatus } from 'aws-sdk/clients/s3';
 
 import { KubernetesMetadata, KubernetesPolicy } from '../../types/kubernetes';
 
@@ -10,15 +10,13 @@ export interface KubernetesBucket {
 	spec: BucketSpec;
 }
 
-type Acl =
-	'private' |
-	'public-read' |
-	'public-read-write' |
-	'aws-exec-read' |
-	'authenticated-read' |
-	'bucket-owner-read' |
-	'bucket-owner-full-control' |
-	'log-delivery-write';
+/**
+ * Possible ACL values for a bucket
+ *
+ * @see {@link https://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl}
+ * @see {@link https://github.com/aws/aws-sdk-js/issues/3054}
+ */
+type Acl = BucketCannedACL | 'aws-exec-read' | 'log-delivery-write';
 
 /**
  * A bucket specification
