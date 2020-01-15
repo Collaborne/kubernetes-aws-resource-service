@@ -1,4 +1,4 @@
-import { TagRoleRequest } from 'aws-sdk/clients/iam';
+import { Tag } from 'aws-sdk/clients/iam';
 import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
@@ -13,7 +13,7 @@ interface TranslateAttributesResult {
 	attributes: {[key: string]: any};
 	policies: Policy[];
 	policyArns: string[];
-	tags: TagRoleRequest | null;
+	tags: Tag[] | null;
 }
 
 /**
@@ -64,27 +64,18 @@ export function translateAttributes(resource: KubernetesRole): TranslateAttribut
 		attributes,
 		policies,
 		policyArns,
-		tags: translateTags(resource.metadata.name, tags),
+		tags: translateTags(tags),
 	};
 }
 
-function translateTags(
-	roleName: string,
-	tags?: KubernetesTag[],
-): TagRoleRequest | null {
+function translateTags(tags?: KubernetesTag[]): Tag[] | null {
 	if (!tags) {
 		return null;
 	}
-
-	const tagSet = tags.map(tag => ({
+	return tags.map(tag => ({
 		Key: tag.key,
 		Value: tag.value,
 	}));
-
-	return {
-		RoleName: roleName,
-		Tags: tagSet,
-	};
 }
 
 function capitalizeFieldNamesForPathExceptCondition(

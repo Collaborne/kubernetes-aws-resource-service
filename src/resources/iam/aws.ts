@@ -1,5 +1,5 @@
 import { IAM } from 'aws-sdk';
-import { TagRoleRequest } from 'aws-sdk/clients/iam';
+import { Tag } from 'aws-sdk/clients/iam';
 import { getLogger } from 'log4js';
 
 import { Policy } from '../../types/aws';
@@ -60,13 +60,10 @@ export class IAMClient {
 		return retryOnTransientNetworkErrors(`${roleName} - IAM::PutRolePolicy`, () => this.iam.putRolePolicy(request));
 	}
 
-	public tagRole(roleName: string, tagRoleParams: TagRoleRequest) {
-		if (tagRoleParams.RoleName && tagRoleParams.RoleName !== roleName) {
-			throw new Error(`Inconsistent role name in configuration: ${roleName} !== ${tagRoleParams.RoleName}`);
-		}
+	public tagRole(roleName: string, tags: Tag[]) {
 		const request = {
-			...tagRoleParams,
 			RoleName: roleName,
+			Tags: tags,
 		};
 		return retryOnTransientNetworkErrors(`${roleName} - IAM::TagRole`, () => this.iam.tagRole(request));
 	}

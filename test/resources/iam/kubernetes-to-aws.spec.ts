@@ -1,6 +1,7 @@
-import { TagRoleRequest } from 'aws-sdk/clients/iam';
 import { expect } from 'chai';
 import 'mocha';
+
+import { Tag } from 'aws-sdk/clients/iam';
 
 import { translateAttributes } from '../../../src/resources/iam/kubernetes-to-aws';
 import { Effect } from '../../../src/types/aws';
@@ -51,15 +52,12 @@ describe('iam/kubernetes-to-aws.spec', function utilsTest() {
 
 		describe('Tags', () => {
 			it('translates tags', () => {
-				const expected: TagRoleRequest = {
-					RoleName: 'TestRole',
-					Tags: [
-						{
-							Key: 'Environment',
-							Value: 'master',
-						},
-					],
-				};
+				const expected: Tag[] = [
+					{
+						Key: 'Environment',
+						Value: 'master',
+					},
+				];
 				const {tags} = translateAttributes({
 					metadata: {
 						name: 'TestRole',
