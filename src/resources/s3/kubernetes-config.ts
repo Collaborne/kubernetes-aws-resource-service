@@ -1,4 +1,4 @@
-import { BucketLocationConstraint } from 'aws-sdk/clients/s3';
+import { BucketLocationConstraint, BucketVersioningStatus } from 'aws-sdk/clients/s3';
 
 import { KubernetesMetadata, KubernetesPolicy } from '../../types/kubernetes';
 
@@ -80,7 +80,7 @@ export interface PublicAccessBlockConfiguration {
  * @see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-versioningconfig.html
  */
 export interface VersioningConfiguration {
-	status: 'Enabled' | 'Suspended';
+	status: BucketVersioningStatus;
 }
 
 interface ServerSideEncryptionConfigurationRule {
