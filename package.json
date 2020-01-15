@@ -9,7 +9,7 @@
     "lint": "tslint -c tslint.json \"src/**/*.ts\" \"test/**/*.ts\"",
     "prepublish": "npm run lint",
     "postinstall": "check-node-version --package",
-    "test": "TS_NODE_CACHE=false TS_NODE_FILES=true node ${_NODE_ARGS} $(npm bin)/nyc mocha --recursive --require ts-node/register --require source-map-support/register \"test/**/*.ts\"",
+    "test": "LOG4JS_CONFIG=test/log4js.json TS_NODE_CACHE=false TS_NODE_FILES=true node ${_NODE_ARGS} $(npm bin)/nyc mocha --recursive --require ts-node/register --require source-map-support/register \"test/**/*.ts\"",
     "start": "node -r source-map-support/register ${_NODE_ARGS} $(test -d build && echo 'build/')src/index.js"
   },
   "repository": {
