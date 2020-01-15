@@ -70,7 +70,7 @@ export class IAMClient {
 	 * This helper will remove and add tags so that the tags of the role in AWS matches the provided
 	 * list of tags.
 	 */
-	public async updateRoleTags(roleName: string, tags: Tag[]) {
+	public async updateRoleTags(roleName: string, tags: Tag[]): Promise<{}> {
 		const {Tags: existingTags, IsTruncated: isTruncated} = await this.listRoleTags(roleName);
 		if (isTruncated) {
 			throw new Error(`Role ${roleName} has too many tags, pagination is not implemented`);
@@ -95,6 +95,9 @@ export class IAMClient {
 			logger.debug(`[${roleName}]: Adding tags ${JSON.stringify(tagsToAdd)}`);
 			await this.tagRole(roleName, tagsToAdd);
 		}
+
+		// No particular return value, but not "void"
+		return {};
 	}
 
 	public async listRolePolicies(roleName: string) {
