@@ -111,8 +111,9 @@ export function injectResourceArn(policy: Policy, resourceArn?: string): Policy 
 	};
 }
 
-function isAwsError(obj: any) {
-	return Boolean(obj.code) && Boolean(obj.message);
+/** @visibleForTesting */
+export function isAwsError(obj: any) {
+	return Boolean(obj) && Boolean(obj.code) && Boolean(obj.message);
 }
 
 export async function retryOnTransientNetworkErrors<T>(logName: string, awsOperation: () => AWSOperation<T>): Promise<T> {

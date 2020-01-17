@@ -74,4 +74,22 @@ describe('utils', () => {
 			});
 		});
 	});
+
+	describe('isAwsError', () => {
+		it('returns false for undefined', () => {
+			expect(utils.isAwsError(undefined)).to.be.false;
+		});
+		it('returns false for null', () => {
+			expect(utils.isAwsError(null)).to.be.false;
+		});
+		it('returns false for object with code and no message', () => {
+			expect(utils.isAwsError({code: 1})).to.be.false;
+		});
+		it('returns false for object with message and no code', () => {
+			expect(utils.isAwsError({message: 'Hi!'})).to.be.false;
+		});
+		it('returns true for object with code and message', () => {
+			expect(utils.isAwsError({code: 1, message: 'test'})).to.be.true;
+		});
+	});
 });
