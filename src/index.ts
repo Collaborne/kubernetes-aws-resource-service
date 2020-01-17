@@ -135,7 +135,7 @@ const listener = server.listen(argv.port, async () => {
 						logger.warn(`Error while watching: ${item.object.message}, ignoring`);
 						return;
 					default:
-						logger.warn(`Unkown watch event type ${item.type}, ignoring`);
+						logger.warn(`Unknown watch event type ${item.type}, ignoring`);
 						return;
 					}
 
