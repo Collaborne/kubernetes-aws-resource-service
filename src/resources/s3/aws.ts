@@ -4,6 +4,7 @@ import {
 	BucketLoggingStatus,
 	CreateBucketRequest,
 	DeleteBucketEncryptionRequest,
+	DeleteBucketLifecycleRequest,
 	DeleteBucketPolicyRequest,
 	DeleteBucketRequest,
 	DeletePublicAccessBlockRequest,
@@ -47,10 +48,10 @@ export class S3Client {
 		return retryOnTransientNetworkErrors('S3::CreateBucket', () => this.s3.createBucket(request));
 	}
 
-	public putBucketLogging(bucketName: string, loggingStatus: BucketLoggingStatus) {
+	public putBucketLogging(bucketName: string, loggingStatus: BucketLoggingStatus | null) {
 		const request: PutBucketLoggingRequest = {
 			Bucket: bucketName,
-			BucketLoggingStatus: loggingStatus,
+			BucketLoggingStatus: loggingStatus || {},
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketLogging', () => this.s3.putBucketLogging(request));
 	}
@@ -71,7 +72,7 @@ export class S3Client {
 		return retryOnTransientNetworkErrors('S3::PutPublicAccessBlock', () => this.s3.putPublicAccessBlock(request));
 	}
 
-	public async putVersioningConfiguration(bucketName: string, versioningConfigurationParams?: VersioningConfiguration) {
+	public async putVersioningConfiguration(bucketName: string, versioningConfigurationParams: VersioningConfiguration | null) {
 		// S3 buckets can have the state: Enabled/Suspended/nothing (the later happens
 		// when versioning was never set)
 		// We don't want to set versioning if it's not in S3. If versioning was formerly
@@ -107,11 +108,18 @@ export class S3Client {
 		return retryOnTransientNetworkErrors('S3::PutBucketLifecycleConfiguration', () => this.s3.putBucketLifecycleConfiguration(request));
 	}
 
-	public putTagging(bucketName: string, tags: Tag[]) {
+	public deleteLifecycleConfiguration(bucketName: string) {
+		const request: DeleteBucketLifecycleRequest = {
+			Bucket: bucketName,
+		};
+		return retryOnTransientNetworkErrors('S3::DeleteBucketLifecycle', () => this.s3.deleteBucketLifecycle(request));
+	}
+
+	public putTagging(bucketName: string, tags: Tag[] | null) {
 		const request: PutBucketTaggingRequest = {
 			Bucket: bucketName,
 			Tagging: {
-				TagSet: tags,
+				TagSet: tags || [],
 			},
 		};
 		return retryOnTransientNetworkErrors('S3::PutBucketTagging', () => this.s3.putBucketTagging(request));

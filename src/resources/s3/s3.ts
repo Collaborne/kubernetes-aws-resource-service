@@ -123,17 +123,25 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			// - acl, logging, policy, Public Access Block, encryption: Overwrite it, letting AWS handle the problem of "update"
 			// Note: These need to be await-ed separately, as we otherwise may hit "conflicting conditional operations",
 			// which won't be retried.
+
+			// AWS S3 translates the canned ACL internally to a full ACL. We do not support these full ACLs here, but as a escape
+			// we will not force down the default canned ACL ('private') unless explicitly specified. By not providing any
+			// 'acl' value we will simply retain whatever is on the bucket.
 			if (ACL) {
 				await this.s3Client.putBucketAcl(bucketName, {ACL});
+			} else {
+				logger.info(`[${bucketName}]: Keeping bucket ACLs unmodified`);
 			}
+
 			if (policy) {
 				await this.s3Client.putBucketPolicy(bucketName, policy, false);
 			} else {
 				await this.s3Client.deleteBucketPolicy(bucketName);
 			}
-			if (loggingParams) {
-				await this.s3Client.putBucketLogging(bucketName, loggingParams);
-			}
+
+			// Always call putBucketLogging, it will disable the logging if no params are given.
+			await this.s3Client.putBucketLogging(bucketName, loggingParams);
+
 			if (publicAccessBlockParams) {
 				await this.s3Client.putPublicAccessBlock(bucketName, publicAccessBlockParams);
 			} else {
@@ -144,15 +152,19 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			} else {
 				await this.s3Client.deleteBucketEncryption(bucket.metadata.name);
 			}
-			if (versioningConfiguration) {
-				await this.s3Client.putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
-			}
+
+			// Always call putVersioningConfiguration, which will work out how to exactly apply the configuration
+			// without disturbing the default "unset" value.
+			await this.s3Client.putVersioningConfiguration(bucket.metadata.name, versioningConfiguration);
+
 			if (lifecycleConfiguration) {
 				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
+			} else {
+				await this.s3Client.deleteLifecycleConfiguration(bucket.metadata.name);
 			}
-			if (tags) {
-				await this.s3Client.putTagging(bucket.metadata.name, tags);
-			}
+
+			// Always call putTagging, it will empty out tags if needed
+			await this.s3Client.putTagging(bucket.metadata.name, tags);
 
 			return response;
 		} catch (err) {
