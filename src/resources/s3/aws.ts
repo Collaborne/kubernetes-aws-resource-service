@@ -2,7 +2,9 @@ import { S3 } from 'aws-sdk';
 import {
 	BucketLifecycleConfiguration,
 	BucketLoggingStatus,
+	CORSRule,
 	CreateBucketRequest,
+	DeleteBucketCorsRequest,
 	DeleteBucketEncryptionRequest,
 	DeleteBucketLifecycleRequest,
 	DeleteBucketPolicyRequest,
@@ -12,6 +14,7 @@ import {
 	HeadBucketRequest,
 	PublicAccessBlockConfiguration,
 	PutBucketAclRequest,
+	PutBucketCorsRequest,
 	PutBucketEncryptionRequest,
 	PutBucketLifecycleConfigurationRequest,
 	PutBucketLoggingRequest,
@@ -22,9 +25,6 @@ import {
 	ServerSideEncryptionConfiguration,
 	Tag,
 	VersioningConfiguration,
-	PutBucketCorsRequest,
-	CORSRule,
-	DeleteBucketCorsRequest,
 } from 'aws-sdk/clients/s3';
 
 import { Policy } from '../../types/aws';
