@@ -194,7 +194,7 @@ export class S3Client {
 				CORSRules: corsRules,
 			},
 		};
-		// XXX: Note that the IAM action is 's3::PutBucketCORS'
+		// XXX: Note that the IAM action is 's3:PutBucketCORS'
 		return retryOnTransientNetworkErrors('S3::PutBucketCors', () => this.s3.putBucketCors(request));
 	}
 
@@ -202,7 +202,7 @@ export class S3Client {
 		const request: DeleteBucketCorsRequest = {
 			Bucket: bucketName,
 		};
-		// XXX: Note that the IAM action is 's3::PutBucketCORS'
+		// XXX: Note that the IAM action is 's3:PutBucketCORS'
 		return retryOnTransientNetworkErrors('S3::DeleteBucketCors', () => this.s3.deleteBucketCors(request));
 	}
 }
