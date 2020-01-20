@@ -97,4 +97,5 @@ spec:
 
 ## Development Notes & Caveats
 
+* The service should always assume the `spec` in the Kubernetes resource to be the correct definition, and then work out how to get the AWS resource into the state prescribed by the `spec`
 * Tests for S3Client may fail when another test has loaded the AWS SDK, in particular the S3 prototype. The tests should still run properly as part of `npm test`.
