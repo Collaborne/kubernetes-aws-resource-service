@@ -94,3 +94,7 @@ spec:
   policyArns:
   - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
 ```
+
+## Development Notes & Caveats
+
+* Tests for S3Client may fail when another test has loaded the AWS SDK, in particular the S3 prototype. The tests should still run properly as part of `npm test`.
