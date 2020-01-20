@@ -412,6 +412,70 @@ describe('s3', function utilsTest() {
 			});
 		});
 
+		describe('CORS Configuration', () => {
+			it('translates empty CORS configuration', () => {
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						corsConfiguration: {
+							corsRules: [],
+						},
+					},
+				});
+				expect(corsRules).to.have.lengthOf(0);
+			});
+			it('translates CORS configuration', () => {
+				const expectedRules = [
+					{
+						Id: 'rule1',
+
+						AllowedHeaders: undefined,
+						AllowedMethods: ['GET'],
+						AllowedOrigins: ['*'],
+						ExposedHeaders: undefined,
+						MaxAge: undefined,
+					},
+					{
+						Id: 'rule2',
+
+						AllowedHeaders: undefined,
+						AllowedMethods: ['POST'],
+						AllowedOrigins: ['https://www.example.com'],
+						ExposedHeaders: undefined,
+						MaxAge: undefined,
+					},
+				];
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						corsConfiguration: {
+							corsRules: [
+								{ id: 'rule1', allowedMethods: ['GET'], allowedOrigins: ['*'] },
+								{ id: 'rule2', allowedMethods: ['POST'], allowedOrigins: ['https://www.example.com'] },
+							],
+						},
+					},
+				});
+				expect(corsRules).to.not.be.null;
+				corsRules!.forEach((corsRule, index) => {
+					expect(corsRule).to.be.deep.equal(expectedRules[index]);
+				});
+			});
+			it('returns null for missing CORS configuration', () => {
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {},
+				});
+				expect(corsRules).to.be.null;
+			});
+		});
+
 		describe('Tags', () => {
 			it('translates tags', () => {
 				const expected = [

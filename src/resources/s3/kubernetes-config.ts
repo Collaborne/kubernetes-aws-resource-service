@@ -1,4 +1,4 @@
-import { BucketCannedACL, BucketLocationConstraint, BucketVersioningStatus } from 'aws-sdk/clients/s3';
+import { BucketCannedACL, BucketLocationConstraint, BucketVersioningStatus, CORSConfiguration } from 'aws-sdk/clients/s3';
 
 import { KubernetesMetadata, KubernetesPolicy } from '../../types/kubernetes';
 
@@ -39,6 +39,12 @@ interface BucketSpec {
 	publicAccessBlockConfiguration?: PublicAccessBlockConfiguration;
 	policy?: KubernetesPolicy;
 	versioningConfiguration?: VersioningConfiguration;
+
+	/**
+	 * CORS configuration of the bucket
+	 */
+	corsConfiguation?: CORSConfiguration;
+
 	[key: string]: any;
 }
 
@@ -93,4 +99,17 @@ export interface BucketEncryption {
 
 export interface LifecycleConfiguration {
 	[key: string]: any;
+}
+
+export interface CorsRule {
+	allowedHeaders?: string[];
+	allowedMethods: Array<'GET'|'PUT'|'HEAD'|'POST'|'DELETE'>;
+	allowedOrigins: string[];
+	exposedHeaders?: string[];
+	id?: string;
+	maxAge?: number;
+}
+
+export interface CorsConfiguration {
+	corsRules: CorsRule[];
 }

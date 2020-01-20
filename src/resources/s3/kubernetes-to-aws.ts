@@ -1,6 +1,7 @@
 import {
 	BucketLifecycleConfiguration,
 	BucketLoggingStatus,
+	CORSRule,
 	PublicAccessBlockConfiguration,
 	ServerSideEncryptionConfiguration,
 	Tag,
@@ -29,6 +30,7 @@ interface TranslateAttributesResult {
 	sseParams: ServerSideEncryptionConfiguration | null;
 	versioningConfiguration: VersioningConfiguration | null;
 	lifecycleConfiguration: BucketLifecycleConfiguration | null;
+	corsRules: CORSRule[] | null;
 	tags: Tag[] | null;
 }
 
@@ -48,6 +50,7 @@ export function translateSpec(bucket: Config.KubernetesBucket): TranslateAttribu
 		versioningConfiguration,
 		policy,
 		tags,
+		corsConfiguration,
 		...otherAttributes
 	} = bucket.spec;
 	const attributes = Object.keys(otherAttributes || {}).reduce((result, key) => {
@@ -70,6 +73,7 @@ export function translateSpec(bucket: Config.KubernetesBucket): TranslateAttribu
 	}, {} as {[key: string]: string});
 	return {
 		attributes,
+		corsRules: translateCorsConfiguration(corsConfiguration),
 		lifecycleConfiguration: translateLifecycleConfiguration(lifecycleConfiguration),
 		loggingParams: translateLoggingConfiguration(loggingConfiguration),
 		policy: translatePolicy(policy, bucket.metadata.name),
@@ -238,6 +242,21 @@ function translateTags(tags?: KubernetesTag[]): Tag[] | null {
 	return tags.map(tag => ({
 		Key: tag.key,
 		Value: tag.value,
+	}));
+}
+
+function translateCorsConfiguration(corsConfiguration?: Config.CorsConfiguration): CORSRule[] | null {
+	if (!corsConfiguration) {
+		return null;
+	}
+
+	return corsConfiguration.corsRules.map(corsRule => ({
+		AllowedHeaders: corsRule.allowedHeaders,
+		AllowedMethods: corsRule.allowedMethods,
+		AllowedOrigins: corsRule.allowedOrigins,
+		ExposedHeaders: corsRule.exposedHeaders,
+		Id: corsRule.id,
+		MaxAge: corsRule.maxAge,
 	}));
 }
 

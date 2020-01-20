@@ -15,6 +15,8 @@ const STUBBED_OPERATIONS = [
 	'putBucketLogging',
 	'putBucketVersioning',
 	'putBucketTagging',
+	'putBucketCors',
+	'deleteBucketCors',
 ] as const;
 
 function getAWSS3Prototype() {
@@ -157,6 +159,31 @@ describe('S3Client', () => {
 			await s3Client.deleteLifecycleConfiguration('bucketName');
 			expect(deleteBucketLifecycle.calledOnce).to.be.true;
 			expect(deleteBucketLifecycle.lastCall.args[0]).to.be.deep.equal({Bucket: 'bucketName'});
+		});
+	});
+
+	describe('putBucketCorsRules', () => {
+		it('sets the rules', async () => {
+			const rules = [
+				{ Id: 'rule1', AllowedMethods: ['GET'], AllowedOrigins: ['*'] },
+			];
+			const {putBucketCors, s3Client} = createS3Client();
+			await s3Client.putBucketCorsRules('bucketName', rules);
+			expect(putBucketCors.calledOnce).to.be.true;
+			expect(putBucketCors.lastCall.args[0]).to.deep.contain({
+				CORSConfiguration: {
+					CORSRules: rules,
+				},
+			});
+		});
+	});
+
+	describe('deleteBucketCorsRules', () => {
+		it('sets the bucket name', async () => {
+			const {deleteBucketCors, s3Client} = createS3Client();
+			await s3Client.deleteBucketCorsRules('bucketName');
+			expect(deleteBucketCors.calledOnce).to.be.true;
+			expect(deleteBucketCors.lastCall.args[0]).to.be.deep.equal({Bucket: 'bucketName'});
 		});
 	});
 });

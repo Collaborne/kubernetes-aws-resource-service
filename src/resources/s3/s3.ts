@@ -37,6 +37,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			sseParams,
 			tags,
 			versioningConfiguration,
+			corsRules,
 		} = translateSpec(bucket);
 		try {
 			// Create the bucket, and wait until that has happened
@@ -62,6 +63,9 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			}
 			if (lifecycleConfiguration) {
 				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
+			}
+			if (corsRules) {
+				await this.s3Client.putBucketCorsRules(bucket.metadata.name, corsRules);
 			}
 			if (tags) {
 				await this.s3Client.putTagging(bucket.metadata.name, tags);
@@ -113,6 +117,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 				sseParams,
 				tags,
 				versioningConfiguration,
+				corsRules,
 			} = translateSpec(bucket);
 			const bucketLocation = await this.s3Client.getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
@@ -161,6 +166,12 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 				await this.s3Client.putLifecycleConfiguration(bucket.metadata.name, lifecycleConfiguration);
 			} else {
 				await this.s3Client.deleteLifecycleConfiguration(bucket.metadata.name);
+			}
+
+			if (corsRules) {
+				await this.s3Client.putBucketCorsRules(bucket.metadata.name, corsRules);
+			} else {
+				await this.s3Client.deleteBucketCorsRules(bucket.metadata.name);
 			}
 
 			// Always call putTagging, it will empty out tags if needed

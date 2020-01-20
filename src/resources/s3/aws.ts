@@ -22,6 +22,9 @@ import {
 	ServerSideEncryptionConfiguration,
 	Tag,
 	VersioningConfiguration,
+	PutBucketCorsRequest,
+	CORSRule,
+	DeleteBucketCorsRequest,
 } from 'aws-sdk/clients/s3';
 
 import { Policy } from '../../types/aws';
@@ -182,5 +185,24 @@ export class S3Client {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::GetBucketLocation', () => this.s3.getBucketLocation(request));
+	}
+
+	public putBucketCorsRules(bucketName: string, corsRules: CORSRule[]) {
+		const request: PutBucketCorsRequest = {
+			Bucket: bucketName,
+			CORSConfiguration: {
+				CORSRules: corsRules,
+			},
+		};
+		// XXX: Note that the IAM action is 's3::PutBucketCORS'
+		return retryOnTransientNetworkErrors('S3::PutBucketCors', () => this.s3.putBucketCors(request));
+	}
+
+	public deleteBucketCorsRules(bucketName: string) {
+		const request: DeleteBucketCorsRequest = {
+			Bucket: bucketName,
+		};
+		// XXX: Note that the IAM action is 's3::PutBucketCORS'
+		return retryOnTransientNetworkErrors('S3::DeleteBucketCors', () => this.s3.deleteBucketCors(request));
 	}
 }
