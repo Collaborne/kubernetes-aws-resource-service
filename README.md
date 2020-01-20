@@ -46,6 +46,7 @@ spec:
 |-----------------|------------------|------
 | `policy`        | `Policy`         | Should be written directly in the YAML, and will get encoded into JSON. The `Resource` field in the policy will be automatically set to the ARN of the queue
 | `redrivePolicy` | `RedrivePolicy`  | Should be written directly in the YAML, and will get encoded into JSON.
+
 #### Example
 
 ```yaml
