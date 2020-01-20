@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import 'mocha';
 
+import { CORSRule } from 'aws-sdk/clients/s3';
+
 import { S3Client } from '../../../src/resources/s3/aws';
 import { KubernetesBucket } from '../../../src/resources/s3/kubernetes-config';
 import { translateSpec } from '../../../src/resources/s3/kubernetes-to-aws';
@@ -427,24 +429,20 @@ describe('s3', function utilsTest() {
 				expect(corsRules).to.have.lengthOf(0);
 			});
 			it('translates CORS configuration', () => {
-				const expectedRules = [
+				const expectedRules: CORSRule[] = [
 					{
-						Id: 'rule1',
-
 						AllowedHeaders: undefined,
 						AllowedMethods: ['GET'],
 						AllowedOrigins: ['*'],
-						ExposedHeaders: undefined,
-						MaxAge: undefined,
+						ExposeHeaders: undefined,
+						MaxAgeSeconds: undefined,
 					},
 					{
-						Id: 'rule2',
-
 						AllowedHeaders: undefined,
 						AllowedMethods: ['POST'],
 						AllowedOrigins: ['https://www.example.com'],
-						ExposedHeaders: undefined,
-						MaxAge: undefined,
+						ExposeHeaders: undefined,
+						MaxAgeSeconds: undefined,
 					},
 				];
 				const {corsRules} = translateSpec({
@@ -464,6 +462,56 @@ describe('s3', function utilsTest() {
 				corsRules!.forEach((corsRule, index) => {
 					expect(corsRule).to.be.deep.equal(expectedRules[index]);
 				});
+			});
+			it('translates CORS rule with max age', () => {
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						corsConfiguration: {
+							corsRules: [
+								{ id: 'rule1', maxAge: 20 },
+							],
+						},
+					},
+				});
+				expect(corsRules).to.not.be.null;
+				expect(corsRules![0]).to.have.ownProperty('MaxAgeSeconds', 20);
+			});
+			it('translates CORS rule with exposed headers', () => {
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						corsConfiguration: {
+							corsRules: [
+								{ id: 'rule1', exposedHeaders: ['foo'] },
+							],
+						},
+					},
+				});
+				expect(corsRules).to.not.be.null;
+				expect(corsRules![0]).to.deep.contain({
+					ExposeHeaders: ['foo'],
+				});
+			});
+			it('drops ids', () => {
+				const {corsRules} = translateSpec({
+					metadata: {
+						name: 'TestBucket',
+					},
+					spec: {
+						corsConfiguration: {
+							corsRules: [
+								{ id: 'rule1', maxAge: 20 },
+							],
+						},
+					},
+				});
+				expect(corsRules).to.not.be.null;
+				expect(corsRules![0]).to.not.have.ownProperty('Id');
 			});
 			it('returns null for missing CORS configuration', () => {
 				const {corsRules} = translateSpec({

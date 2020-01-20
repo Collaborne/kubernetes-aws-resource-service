@@ -245,19 +245,23 @@ function translateTags(tags?: KubernetesTag[]): Tag[] | null {
 	}));
 }
 
+function translateCorsRule(corsRule: Config.CorsRule): CORSRule {
+	// Note that we're dropping the 'Id' here, as that is only informational it seems.
+	return {
+		AllowedHeaders: corsRule.allowedHeaders,
+		AllowedMethods: corsRule.allowedMethods,
+		AllowedOrigins: corsRule.allowedOrigins,
+		ExposeHeaders: corsRule.exposedHeaders,
+		MaxAgeSeconds: corsRule.maxAge,
+	};
+}
+
 function translateCorsConfiguration(corsConfiguration?: Config.CorsConfiguration): CORSRule[] | null {
 	if (!corsConfiguration) {
 		return null;
 	}
 
-	return corsConfiguration.corsRules.map(corsRule => ({
-		AllowedHeaders: corsRule.allowedHeaders,
-		AllowedMethods: corsRule.allowedMethods,
-		AllowedOrigins: corsRule.allowedOrigins,
-		ExposedHeaders: corsRule.exposedHeaders,
-		Id: corsRule.id,
-		MaxAge: corsRule.maxAge,
-	}));
+	return corsConfiguration.corsRules.map(translateCorsRule);
 }
 
 function capitalizeFieldNameUpperId(s: string) {
