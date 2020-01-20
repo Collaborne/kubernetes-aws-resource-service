@@ -1,10 +1,10 @@
 # kubernetes-aws-resource-service [![Build Status](https://travis-ci.org/Collaborne/kubernetes-aws-resource-service.svg?branch=master)](https://travis-ci.org/Collaborne/kubernetes-aws-resource-service) [![Greenkeeper badge](https://badges.greenkeeper.io/Collaborne/kubernetes-aws-resource-service.svg)](https://greenkeeper.io/)
 
-An "operator" service to automatically manage AWS resources based on kubernetes TPRs.
+An "operator" service to automatically manage AWS resources based on kubernetes CRDs.
 
 ## Supported Resources
 
-[resources.yml](/resources.yml) has the definitions of all currently supported resources. This file should be loaded into the cluster before using the kubernetes-aws-resource-service to create the ThirdPartyResources.
+[resources.yml](/resources.yml) has the definitions of all currently supported resources. This file should be loaded into the cluster before using the kubernetes-aws-resource-service to create the CustomResourceDefinitions.
 
 ```sh
 kubectl apply -f resources.yml
