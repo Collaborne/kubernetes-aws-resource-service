@@ -36,7 +36,7 @@
     "lodash": "^4.17.4",
     "log4js": "^6.0.0",
     "npm-warn-shrinkwrap": "^1.0.2",
-    "prom-client": "^11.2.1",
+    "prom-client": "^12.0.0",
     "yargs": "^15.0.1"
   },
   "devDependencies": {
