@@ -29,7 +29,7 @@
   "homepage": "https://github.com/Collaborne/kubernetes-aws-resource-service#readme",
   "dependencies": {
     "auto-kubernetes-client": "^0.6.1",
-    "aws-sdk": "^2.45.0",
+    "aws-sdk": "^2.631.0",
     "check-node-version": "^3.1.1",
     "express": "^4.16.2",
     "express-prom-bundle": "^5.0.2",
