@@ -34,7 +34,7 @@
     "express": "^4.16.2",
     "express-prom-bundle": "^5.0.2",
     "lodash": "^4.17.4",
-    "log4js": "^6.0.0",
+    "log4js": "^6.2.0",
     "npm-warn-shrinkwrap": "^1.0.2",
     "prom-client": "^11.2.1",
     "yargs": "^15.0.1"
