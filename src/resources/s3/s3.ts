@@ -121,7 +121,7 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 			} = translateSpec(bucket);
 			const bucketLocation = await this.s3Client.getBucketLocation(bucketName);
 			if (!isCompatibleBucketLocation(bucketLocation.LocationConstraint, CreateBucketConfiguration.LocationConstraint)) {
-				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation} to ${CreateBucketConfiguration.locationConstraint}`);
+				logger.error(`[${bucketName}]: Cannot update bucket location from ${bucketLocation.LocationConstraint} to ${CreateBucketConfiguration.LocationConstraint}`);
 				throw new Error('Invalid update: Cannot update bucket location');
 			}
 
