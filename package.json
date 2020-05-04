@@ -7,7 +7,6 @@
     "build": "tsc",
     "install": "npm-warn-shrinkwrap",
     "lint": "tslint -c tslint.json \"src/**/*.ts\" \"test/**/*.ts\"",
-    "prepublish": "npm run lint",
     "postinstall": "check-node-version --package",
     "test": "env LOG4JS_CONFIG=test/log4js.json TS_NODE_CACHE=false TS_NODE_FILES=true node ${_NODE_ARGS} $(npm bin)/nyc mocha",
     "start": "node -r source-map-support/register ${_NODE_ARGS} $(test -d build && echo 'build/')src/index.js"

@@ -24,6 +24,9 @@ install:
 - npm install
 - npm run build
 - npm prune && npm shrinkwrap && mkdir -p deploy && cp -r package.json npm-shrinkwrap.json log4js.json node_modules build deploy && npm install --production --prefix deploy --ignore-scripts
+script:
+- npm run lint
+- npm test
 after_success:
 - docker build `echo ${TAGS} | sed -re "s,\b([-._[:alnum:]]+)\b,-t ${DOCKER_NAME}:\1,g"` .
 deploy:
