@@ -83,8 +83,8 @@ export class S3Client {
 		let versioningConfiguration: VersioningConfiguration;
 		if (!versioningConfigurationParams) {
 			const currentStatusRequest = {Bucket: bucketName};
-			const currentStatusRespose = await retryOnTransientNetworkErrors('S3::GetBucketVersioning', () => this.s3.getBucketVersioning(currentStatusRequest));
-			if (!currentStatusRespose.Status) {
+			const currentStatusResponse = await retryOnTransientNetworkErrors('S3::GetBucketVersioning', () => this.s3.getBucketVersioning(currentStatusRequest));
+			if (!currentStatusResponse.Status) {
 				// Not having versioning configuration for a bucket that was never configured is fine
 				return Promise.resolve();
 			}
