@@ -11,6 +11,7 @@ import {
 	DeleteBucketRequest,
 	DeletePublicAccessBlockRequest,
 	GetBucketLocationRequest,
+	GetBucketLoggingRequest,
 	HeadBucketRequest,
 	PublicAccessBlockConfiguration,
 	PutBucketAclRequest,
@@ -49,6 +50,13 @@ export class S3Client {
 			Bucket: bucketName,
 		};
 		return retryOnTransientNetworkErrors('S3::CreateBucket', () => this.s3.createBucket(request));
+	}
+
+	public getBucketLogging(bucketName: string): Promise<BucketLoggingStatus> {
+		const request: GetBucketLoggingRequest = {
+			Bucket: bucketName,
+		};
+		return retryOnTransientNetworkErrors('S3::GetBucketLogging', () => this.s3.getBucketLogging(request));
 	}
 
 	public putBucketLogging(bucketName: string, loggingStatus: BucketLoggingStatus | null) {

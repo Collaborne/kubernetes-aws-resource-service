@@ -1,3 +1,4 @@
+import { isEqual } from 'lodash';
 import { getLogger } from 'log4js';
 
 import { ResourceClient } from '../client';
@@ -144,8 +145,16 @@ export class S3Bucket implements ResourceClient<KubernetesBucket> {
 				await this.s3Client.deleteBucketPolicy(bucketName);
 			}
 
-			// Always call putBucketLogging, it will disable the logging if no params are given.
-			await this.s3Client.putBucketLogging(bucketName, loggingParams);
+			// Call putBucketLogging when something changed
+			// We don't want to call this repeatedly with a "disabled" set of parameters, as that can trigger
+			// AWS GuardDuty findings of "logging was disabled".
+			// For simplicity we simply compare the JSON.stringify()-d configurations, which should be enough
+			// to ensure that we detect changes, at the risk of possibly "over-reacting"
+			const {LoggingEnabled: currentLoggingEnabled} = await this.s3Client.getBucketLogging(bucketName);
+			const {LoggingEnabled: requestedLoggingEnabled} = loggingParams || {};
+			if (!isEqual(currentLoggingEnabled, requestedLoggingEnabled)) {
+				await this.s3Client.putBucketLogging(bucketName, loggingParams);
+			}
 
 			if (publicAccessBlockParams) {
 				await this.s3Client.putPublicAccessBlock(bucketName, publicAccessBlockParams);
